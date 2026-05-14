@@ -46,7 +46,7 @@ export default function Home() {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPrefs, setSelectedPrefs] = useState([]);
-  const [selectedSkills, setSelectedSkills] = useState([]); // スキル選択用
+  const [selectedSkills, setSelectedSkills] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   const [stationSuggestions, setStationSuggestions] = useState([]);
   const [isStationLoading, setIsStationLoading] = useState(false);
@@ -168,10 +168,7 @@ export default function Home() {
     const contentText = ((p.title || "") + (p.skills || "") + (p.content || "") + (p.location || "")).toLowerCase();
     const matchesSearch = contentText.includes(searchQuery.toLowerCase());
     const matchesPref = selectedPrefs.length === 0 ? true : selectedPrefs.some((pref) => p.location?.includes(pref));
-    
-    // スキル検索の修正：選択したスキルがすべて含まれているか
     const matchesSkill = selectedSkills.length === 0 ? true : selectedSkills.every((skill) => contentText.includes(skill.toLowerCase()));
-    
     const matchesRemote = isRemoteOnly ? p.location?.includes("リモート") || p.title?.includes("リモート") : true;
     
     return matchesSearch && matchesPref && matchesSkill && matchesRemote;
@@ -189,7 +186,7 @@ export default function Home() {
   const toggleSelection = (item, list, setter) => {
     if (list.includes(item)) setter(list.filter((i) => i !== item));
     else setter([...list, item]);
-    setCurrentPage(1); // フィルタを変えたら1ページ目に戻す
+    setCurrentPage(1);
   };
 
   const ProjectCard = ({ project }) => (
@@ -197,9 +194,23 @@ export default function Home() {
       <button onClick={() => toggleFavorite(project.id)} style={{ position: "absolute", top: "15px", right: "15px", background: "none", border: "none", cursor: "pointer", fontSize: "1.4rem", color: project.favorite ? "#ed8936" : "#cbd5e0" }}>{project.favorite ? "★" : "☆"}</button>
       <h3 style={{ fontSize: "1rem", color: "#1a365d", marginBottom: "20px", fontWeight: "700", paddingRight: "25px" }}>{project.title}</h3>
       <div style={{ fontSize: "0.85rem", flexGrow: 1 }}>
-        <div style={{ display: "flex", marginBottom: "8px" }}><span style={{ fontWeight: "bold", minWidth: "80px" }}>【場所】</span><span>{project.location || "不明"}</span></div>
-        <div style={{ display: "flex", marginBottom: "8px" }}><span style={{ fontWeight: "bold", minWidth: "80px" }}>【単価】</span><span>{project.price || "相談"}</span></div>
-        <div style={{ display: "flex" }}><span style={{ fontWeight: "bold", minWidth: "80px" }}>【募集人数】</span><span>確認中</span></div>
+        <div style={{ display: "flex", marginBottom: "8px" }}>
+          <span style={{ fontWeight: "bold", minWidth: "80px" }}>【場所】</span>
+          <span>{project.location || "記載なし"}</span>
+        </div>
+        {/* 期間を追加 */}
+        <div style={{ display: "flex", marginBottom: "8px" }}>
+          <span style={{ fontWeight: "bold", minWidth: "80px" }}>【期間】</span>
+          <span>{project.period || "記載なし"}</span>
+        </div>
+        <div style={{ display: "flex", marginBottom: "8px" }}>
+          <span style={{ fontWeight: "bold", minWidth: "80px" }}>【単価】</span>
+          <span>{project.price || "記載なし"}</span>
+        </div>
+        <div style={{ display: "flex" }}>
+          <span style={{ fontWeight: "bold", minWidth: "80px" }}>【募集人数】</span>
+          <span>記載なし</span>
+        </div>
       </div>
       <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
         <button onClick={() => {
@@ -211,7 +222,9 @@ export default function Home() {
               setHistoryIds(newHistory);
             }
           }} 
-          style={{ flex: 1, padding: "10px", backgroundColor: "#1a365d", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}>詳細を見る</button>
+          style={{ flex: 1, padding: "10px", backgroundColor: "#1a365d", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}>
+          詳細を見る
+        </button>
         <button onClick={() => deleteProject(project.id)} style={{ padding: "0 12px", borderRadius: "6px", border: "1px solid #fc8181", color: "#e53e3e", background: "#fff", cursor: "pointer" }}>削除</button>
       </div>
     </div>
@@ -219,7 +232,6 @@ export default function Home() {
 
   return (
     <div style={{ backgroundColor: "#f7fafc", minHeight: "100vh", color: "#2d3748", fontFamily: "sans-serif" }}>
-      {/* ナビゲーション */}
       <nav style={{ backgroundColor: "#1a365d", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ display: "flex", height: "60px", padding: "0 20px" }}>
           {[
@@ -238,10 +250,7 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* メインレイアウト */}
       <div style={{ display: "flex", padding: "40px 20px", gap: "30px", boxSizing: "border-box" }}>
-        
-        {/* 左サイドバー */}
         <aside style={{ width: "220px", flexShrink: 0 }}>
           <h2 style={{ fontSize: "1rem", fontWeight: "bold", marginBottom: "15px", color: "#1a365d", borderLeft: "4px solid #1a365d", paddingLeft: "10px" }}>カテゴリー</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -268,7 +277,6 @@ export default function Home() {
           </div>
         </aside>
 
-        {/* メインコンテンツ */}
         <main style={{ flexGrow: 1, maxWidth: "1600px" }}>
           {viewMode === "all" && (
             <div style={{ backgroundColor: "#fff", padding: "25px", borderRadius: "10px", border: "1px solid #e2e8f0", marginBottom: "30px" }}>
@@ -297,10 +305,8 @@ export default function Home() {
                 </label>
               </div>
 
-              {/* 絞り込みパネル */}
               {showFilters && (
                 <div style={{ marginTop: "20px", borderTop: "1px solid #edf2f7", paddingTop: "20px" }}>
-                  {/* スキルフィルタ */}
                   {skillCategories.map((cat) => (
                     <div key={cat.label} style={{ marginBottom: "10px" }}>
                       <div style={{ marginBottom: "10px", fontSize: "0.8rem", fontWeight: "bold", color: "#4a5568" }}>{cat.label}</div>
@@ -330,7 +336,6 @@ export default function Home() {
 
                   <div style={{ height: "1px", backgroundColor: "#edf2f7", margin: "20px 0" }} />
 
-                  {/* 都道府県フィルタ */}
                   <div style={{ marginBottom: "10px", fontSize: "0.8rem", fontWeight: "bold", color: "#4a5568" }}>都道府県</div>
                   <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                     {prefectures.map(p => (
@@ -384,7 +389,6 @@ export default function Home() {
         </main>
       </div>
 
-      {/* 詳細モーダル */}
       {selectedProject && (
         <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 }} onClick={() => setSelectedProject(null)}>
           <div style={{ backgroundColor: "#fff", width: "95%", maxWidth: "800px", borderRadius: "12px", padding: "40px", maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
