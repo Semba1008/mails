@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+// HTML内のURLやメールアドレスをリンク化する関数        
 const formatContent = (html) => {
   if (typeof window === "undefined") return html;
   try {
@@ -8,6 +9,7 @@ const formatContent = (html) => {
     const decoded = txt.value;
     const urlRegex = /(https?:\/\/[^\s]+|[\w.-]+@[\w.-]+\.[a-zA-Z]{2,4})/g;
     const parts = decoded.split(urlRegex);
+
     return parts.map((part, i) => {
       if (part?.match(/https?:\/\//)) {
         return (
@@ -157,6 +159,14 @@ export default function Home() {
     return cats;
   };
 
+  // ★ 本文から募集人数を抽出するロジック
+  const extractRecruitment = (content) => {
+    if (!content) return "記載なし";
+    const regex = /([0-9０-９]+|複数|若干)名(以上)?/;
+    const match = content.match(regex);
+    return match ? match[0] : "記載なし";
+  };
+
   const filtered = projects.filter((p) => {
     if (favFilters.length > 0) {
       const pCats = getProjectCategories(p);
@@ -189,8 +199,11 @@ export default function Home() {
     setCurrentPage(1);
   };
 
+  // 案件カードコンポーネント
   const ProjectCard = ({ project }) => (
     <div style={{ backgroundColor: "#fff", borderRadius: "10px", padding: "25px", border: "1px solid #edf2f7", display: "flex", flexDirection: "column", position: "relative" }}>
+      <div style={{ fontSize: "0.7rem", color: "#a0aec0", marginBottom: "5px" }}>ID: {project.id}</div>
+
       <button onClick={() => toggleFavorite(project.id)} style={{ position: "absolute", top: "15px", right: "15px", background: "none", border: "none", cursor: "pointer", fontSize: "1.4rem", color: project.favorite ? "#ed8936" : "#cbd5e0" }}>{project.favorite ? "★" : "☆"}</button>
       <h3 style={{ fontSize: "1rem", color: "#1a365d", marginBottom: "20px", fontWeight: "700", paddingRight: "25px" }}>{project.title}</h3>
       <div style={{ fontSize: "0.85rem", flexGrow: 1 }}>
@@ -198,7 +211,6 @@ export default function Home() {
           <span style={{ fontWeight: "bold", minWidth: "80px" }}>【場所】</span>
           <span>{project.location || "記載なし"}</span>
         </div>
-        {/* 期間を追加 */}
         <div style={{ display: "flex", marginBottom: "8px" }}>
           <span style={{ fontWeight: "bold", minWidth: "80px" }}>【期間】</span>
           <span>{project.period || "記載なし"}</span>
@@ -209,7 +221,7 @@ export default function Home() {
         </div>
         <div style={{ display: "flex" }}>
           <span style={{ fontWeight: "bold", minWidth: "80px" }}>【募集人数】</span>
-          <span>記載なし</span>
+          <span>{extractRecruitment(project.content)}</span>
         </div>
       </div>
       <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
