@@ -363,7 +363,7 @@ export default function Home() {
   return (
     <div style={{ backgroundColor: "#f7fafc", minHeight: "100vh", color: "#2d3748", fontFamily: "sans-serif" }}>
       {/* 共通グローバルナビゲーション */}
-      <nav style={{ backgroundColor: "#1a365d", position: "sticky", top: 0, zIndex: 100 }}>
+      <nav style={{ backgroundColor: "#00bfa5", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ display: "flex", height: "60px", padding: "0 20px", alignItems: "center" }}>
           <div style={{ marginRight: "30px", height: "35px", display: "flex", alignItems: "center" }}>
             <img 
@@ -386,9 +386,29 @@ export default function Home() {
         <aside style={{ width: "220px", flexShrink: 0 }}>
           <h2 style={{ fontSize: "1rem", fontWeight: "bold", marginBottom: "15px", color: "#1a365d", borderLeft: "4px solid #1a365d", paddingLeft: "10px" }}>カテゴリー</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {sideCategories.map((btn) => (
-              <button key={btn.id} onClick={() => toggleFavFilter(btn.id)} style={{ padding: "12px 15px", borderRadius: "8px", textAlign: "left", border: "1px solid", borderColor: (btn.id === "all" ? favFilters.length === 0 : favFilters.includes(btn.id)) ? "#1a365d" : "#cbd5e0", backgroundColor: (btn.id === "all" ? favFilters.length === 0 : favFilters.includes(btn.id)) ? "#1a365d" : "#fff", color: (btn.id === "all" ? favFilters.length === 0 : favFilters.includes(btn.id)) ? "#fff" : "#4a5568", cursor: "pointer", fontSize: "0.95rem", fontWeight: "bold" }}>{btn.label}</button>
-            ))}
+            {sideCategories.map((btn) => {
+              const isSelected = btn.id === "all" ? favFilters.length === 0 : favFilters.includes(btn.id);
+              return (
+                <button 
+                  key={btn.id} 
+                  onClick={() => toggleFavFilter(btn.id)} 
+                  style={{ 
+                    padding: "12px 15px", 
+                    borderRadius: "8px", 
+                    textAlign: "left", 
+                    border: "1px solid", 
+                    borderColor: isSelected ? "#00bfa5" : "#cbd5e0", 
+                    backgroundColor: isSelected ? "#00bfa5" : "#fff", 
+                    color: isSelected ? "#fff" : "#4a5568", 
+                    cursor: "pointer", 
+                    fontSize: "0.95rem", 
+                    fontWeight: "bold" 
+                  }}
+                >
+                  {btn.label}
+                </button>
+              );
+            })}
           </div>
         </aside>
 
