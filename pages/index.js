@@ -268,7 +268,13 @@ export default function Home() {
     event.preventDefault();
     event.stopPropagation();
     const targetEmail = project.content?.match(/[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}/)?.[0] || "";
-    window.location.href = `mailto:${targetEmail}`;
+    const ccEmail = project.cc_address || "";
+
+    if (ccEmail) {
+      window.location.href = `mailto:${targetEmail}?cc=${encodeURIComponent(ccEmail)}`;
+    } else {
+      window.location.href = `mailto:${targetEmail}`;
+    }
   };
  
   const handleExecuteDelete = async () => {
@@ -469,8 +475,9 @@ export default function Home() {
                 ["単価", selectedProject.price || "記載なし"],
                 ["期間", selectedProject.period || "記載なし"],
                 ["募集人数", extractRecruitment(selectedProject.content)],
+                ["CC", selectedProject.cc_address || "なし"],
               ].map(([label, value]) => (
-<div key={label} style={{ display: "flex", marginBottom: label === "募集人数" ? 0 : 10 }}>
+<div key={label} style={{ display: "flex", marginBottom: label === "CC" ? 0 : 10 }}>
 <span style={{ fontWeight: "bold", minWidth: 100 }}>【{label}】</span>
 <span>{value}</span>
 </div>
