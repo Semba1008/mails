@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
- 
 const LINK_STYLE = { color: "#3182ce", textDecoration: "underline" };
 // 1ページあたりの表示件数
 const PAGE_SIZE = 24;
- 
 // 都道府県名の揺らぎを吸収するための正規化関数
 const normalize = (name) => name?.replace(/(都|道|府|県)$/, "") || "";
- 
 // 地域ごとの都道府県リスト
 const regionalPrefectures = [
   {
@@ -31,7 +28,6 @@ const regionalPrefectures = [
     ],
   },
 ];
- 
 // スキルカテゴリとそれぞれのスキルリスト
 const skillCategories = [
   {
@@ -51,7 +47,6 @@ const skillCategories = [
     skills: ["MySQL", "PostgreSQL", "Oracle", "Git", "GitHub", "CircleCI", "Jenkins", "Ansible"],
   },
 ];
- 
 // サイドバーのカテゴリ
 const sideCategories = [
   { id: "all", label: "すべて" },
@@ -59,7 +54,6 @@ const sideCategories = [
   { id: "infra", label: "インフラ" },
   { id: "embedded", label: "組み込み" },
 ];
- 
 // タブの定義
 const tabs = [
   { id: "all", label: "案件を探す" },
@@ -67,7 +61,6 @@ const tabs = [
   { id: "favorites", label: "お気に入り" },
   { id: "history", label: "閲覧履歴" },
 ];
- 
 // ローカルストレージのラッパー
 const storage = {
   get(key) {
@@ -84,7 +77,6 @@ const storage = {
     }
   },
 };
- 
 // HTMLエンティティをデコードする関数
 const decodeHtml = (html) => {
   if (typeof window === "undefined") return html;
@@ -92,7 +84,6 @@ const decodeHtml = (html) => {
   textarea.innerHTML = html;
   return textarea.value;
 };
- 
 // テキスト内のURLやメールアドレスをリンクに変換する関数
 const formatContent = (html) => {
   try {
@@ -119,7 +110,6 @@ const formatContent = (html) => {
     return html;
   }
 };
- 
 // メールの署名部分を削除する関数
 const removeSignature = (text = "") => {
   const bodyLines = [];
@@ -131,13 +121,11 @@ const removeSignature = (text = "") => {
   }
   return bodyLines.join("\n").trim();
 };
- 
 // 募集人数を抽出する関数
 const extractRecruitment = (content = "") => {
   const match = content.match(/([0-9０-９]+|複数|若干)名(以上)?/);
   return match?.[0] || "記載なし";
 };
- 
 // 案件のカテゴリ判定
 const getProjectCategories = (project) => {
   const text = `${project.title || ""}${project.content || ""}${project.skills || ""}`.toLowerCase();
@@ -150,7 +138,6 @@ const getProjectCategories = (project) => {
     categories.push("embedded");
   return categories.length ? categories : ["dev"];
 };
- 
 // スタイル定義
 const styles = {
   page: { backgroundColor: "#f7fafc", minHeight: "100vh", color: "#2d3748", fontFamily: "sans-serif" },
@@ -164,9 +151,10 @@ const styles = {
   pageBtn: { padding: "8px 14px", borderRadius: 6, border: "1px solid #cbd5e0", background: "#fff", color: "#2d3748", cursor: "pointer", fontWeight: "bold", fontSize: "0.9rem", transition: "all 0.2s" },
   modalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 },
   modalContent: { backgroundColor: "#fff", borderRadius: 12, padding: 30, maxWidth: 800, width: "100%", maxHeight: "90vh", overflowY: "auto", position: "relative" },
-  spinner: { width: 40, height: 40, border: "4px solid rgba(0,191,165,0.2)", borderTopColor: "#00bfa5", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "40px auto" }
+  spinner: { width: 40, height: 40, border: "4px solid rgba(0,191,165,0.2)", borderTopColor: "#00bfa5", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "40px auto" },
+  attachmentSection: { marginTop: 15, paddingTop: 12, borderTop: "1px dashed #e2e8f0" },
+  attachmentLink: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.85rem", color: "#3182ce", textDecoration: "none", marginRight: 12, marginBottom: 4, fontWeight: "500" }
 };
- 
 // メインコンポーネント
 export default function Home() {
   const [projects, setProjects] = useState([]);
@@ -187,7 +175,6 @@ export default function Home() {
   const [appliedIds, setAppliedIds] = useState([]);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [selectedRegion, setSelectedRegion] = useState("すべて");
- 
   // APIからデータを取得
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -195,12 +182,10 @@ export default function Home() {
       const res = await fetch("/api/mails");
       const payload = await res.json();
       if (!payload || payload.error) return;
- 
       const favorites = storage.get("favorites");
       const history = storage.get("history");
       const read = storage.get("readProjects");
       const applied = storage.get("appliedIds");
- 
       setHistoryIds(history);
       setReadIds(read);
       setAppliedIds(applied);
@@ -216,11 +201,9 @@ export default function Home() {
       setLoading(false);
     }
   }, []);
- 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
- 
   // 駅名サジェスト取得
   const fetchStations = useCallback(async (keyword) => {
     if (!keyword) {
@@ -242,33 +225,26 @@ export default function Home() {
       setStationSuggestions([]);
     }
   }, [selectedPrefs]);
- 
   // フィルタリング処理
   const filteredProjects = useMemo(() => {
     const query = searchQuery.toLowerCase();
     const currentRegionData = regionalPrefectures.find((r) => r.region === selectedRegion);
     const allowedPrefsNormalized = currentRegionData ? currentRegionData.prefs.map(normalize) : [];
- 
     return projects.filter((project) => {
       if (hideClosed && project.isClosed) return false;
- 
       const isApplied = appliedIds.includes(project.id);
       if (viewMode === "applied") return isApplied;
       if (isApplied) return false;
       if (viewMode === "favorites") return project.favorite;
       if (viewMode === "history") return historyIds.includes(project.id);
- 
       if (favFilters.length) {
         const categories = getProjectCategories(project);
         if (!favFilters.every((filter) => categories.includes(filter))) return false;
       }
- 
       const pureContent = removeSignature(project.content || "");
       const searchableText = `${project.title || ""}${project.skills || ""}${pureContent}${project.location || ""}`.toLowerCase();
- 
       const projectLocation = (project.location || "").trim();
       const projectPrefNormalized = normalize(projectLocation);
- 
       // 地域フィルターの判定 (前方一致)
       if (viewMode === "all" && selectedRegion !== "すべて") {
         const matchesRegion = allowedPrefsNormalized.some((pref) => {
@@ -276,7 +252,6 @@ export default function Home() {
         });
         if (!matchesRegion) return false;
       }
- 
       // 都道府県詳細フィルターの判定 (前方一致)
       if (selectedPrefs.length) {
         const matchesPref = selectedPrefs.some((pref) => {
@@ -284,28 +259,22 @@ export default function Home() {
         });
         if (!matchesPref) return false;
       }
- 
       const matchesSkill = !selectedSkills.length || selectedSkills.every((skill) => searchableText.includes(skill.toLowerCase()));
       const matchesRemote = !isRemoteOnly || [project.location, project.title, pureContent].some((text) => text?.includes("リモート"));
- 
       return searchableText.includes(query) && matchesSkill && matchesRemote;
     });
   }, [appliedIds, favFilters, hideClosed, historyIds, isRemoteOnly, projects, searchQuery, selectedPrefs, selectedSkills, viewMode, selectedRegion]);
- 
   const totalPages = Math.ceil(filteredProjects.length / PAGE_SIZE);
   const currentItems = filteredProjects.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
- 
   // ページネーション範囲計算
   const paginationRange = useMemo(() => {
     const siblingCount = 2;
     const totalPageNumbers = siblingCount * 2 + 5;
     if (totalPageNumbers >= totalPages) return Array.from({ length: totalPages }, (_, i) => i + 1);
- 
     const leftSiblingIndex = Math.max(currentPage - siblingCount, 1);
     const rightSiblingIndex = Math.min(currentPage + siblingCount, totalPages);
     const shouldShowLeftDots = leftSiblingIndex > 2;
     const shouldShowRightDots = rightSiblingIndex < totalPages - 2;
- 
     if (!shouldShowLeftDots && shouldShowRightDots) {
       return Array.from({ length: 3 + 2 * siblingCount }, (_, i) => i + 1);
     }
@@ -318,24 +287,20 @@ export default function Home() {
     }
     return [];
   }, [currentPage, totalPages]);
- 
   const changePage = (pageNumber) => {
     setCurrentPage(pageNumber);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
- 
   const toggleSelection = (item, selected, setter) => {
     setter(selected.includes(item) ? selected.filter((value) => value !== item) : [...selected, item]);
     setCurrentPage(1);
   };
- 
   const toggleFavorite = (event, id) => {
     event.stopPropagation();
     const updated = projects.map((p) => p.id === id ? { ...p, favorite: !p.favorite } : p);
     setProjects(updated);
     storage.set("favorites", updated.filter((p) => p.favorite).map((p) => p.id));
   };
- 
   const toggleApplied = (event, id) => {
     event.preventDefault();
     event.stopPropagation();
@@ -343,7 +308,6 @@ export default function Home() {
     setAppliedIds(updated);
     storage.set("appliedIds", updated);
   };
- 
   const openProject = (project) => {
     setSelectedProject(project);
     const history = storage.get("history");
@@ -359,7 +323,6 @@ export default function Home() {
       setReadIds(updated);
     }
   };
- 
   const handleSendEmail = (event, project) => {
     event.preventDefault();
     event.stopPropagation();
@@ -367,21 +330,23 @@ export default function Home() {
     const ccEmail = project.cc_address || "";
     window.location.href = ccEmail ? `mailto:${targetEmail}?cc=${encodeURIComponent(ccEmail)}` : `mailto:${targetEmail}`;
   };
- 
+  // 削除機能の実行関数（エンドポイントを修正済み）
   const handleExecuteDelete = async () => {
     if (!deleteTargetId) return;
     try {
       const res = await fetch(`/api/mails?id=${encodeURIComponent(deleteTargetId)}`, { method: "DELETE" });
-      if (!res.ok) return;
+      if (!res.ok) {
+        alert("削除に失敗しました。サーバーエラーの可能性があります。");
+        return;
+      }
       setProjects((prev) => prev.filter((p) => p.id !== deleteTargetId));
       setSelectedProject((prev) => prev?.id === deleteTargetId ? null : prev);
     } catch (error) {
-      console.error(error);
+      console.error("削除リクエスト中にエラーが発生しました:", error);
     } finally {
       setDeleteTargetId(null);
     }
   };
- 
   // 表示対象となる都道府県リストの取得
   const filterablePrefectures = useMemo(() => {
     if (selectedRegion === "すべて") {
@@ -389,11 +354,19 @@ export default function Home() {
     }
     return regionalPrefectures.find((r) => r.region === selectedRegion)?.prefs || [];
   }, [selectedRegion]);
- 
   const ProjectCard = ({ project }) => {
     const isRead = readIds.includes(project.id);
     const isApplied = appliedIds.includes(project.id);
- 
+    // 添付ファイルの配列を安全に取得（文字列で来ている場合はパース、無ければ空配列）
+    const attachments = useMemo(() => {
+      if (!project.attachments) return [];
+      if (Array.isArray(project.attachments)) return project.attachments;
+      try {
+        return JSON.parse(project.attachments);
+      } catch {
+        return [];
+      }
+    }, [project.attachments]);
     return (
 <div style={{ ...styles.card, opacity: project.isClosed ? 0.7 : 1 }}>
 <div style={{ fontSize: "0.7rem", color: "#a0aec0", marginBottom: 5 }}>ID: {project.id}</div>
@@ -408,12 +381,10 @@ export default function Home() {
             {project.favorite ? "★" : "☆"}
 </button>
 </div>
- 
-        <h3 style={{ fontSize: "1rem", color: "#1a365d", marginBottom: 20, fontWeight: 700, paddingRight: 60, textDecoration: project.isClosed ? "line-through" : "none" }}>
+<h3 style={{ fontSize: "1rem", color: "#1a365d", marginBottom: 20, fontWeight: 700, paddingRight: 60, textDecoration: project.isClosed ? "line-through" : "none" }}>
           {project.title}
 </h3>
- 
-        <div style={{ fontSize: "0.85rem", flexGrow: 1 }}>
+<div style={{ fontSize: "0.85rem", flexGrow: 1 }}>
           {[
             ["場所", project.location || "記載なし"],
             ["単価", project.price || "記載なし"],
@@ -426,9 +397,25 @@ export default function Home() {
 <span>{value}</span>
 </div>
           ))}
+          {/* カード側の添付ファイル一覧表示 */}
+          {attachments.length > 0 && (
+<div style={styles.attachmentSection}>
+<div style={{ fontWeight: "bold", marginBottom: 6, fontSize: "0.8rem", color: "#4a5568" }}>📎 添付ファイル:</div>
+<div style={{ display: "flex", flexWrap: "wrap" }}>
+                {attachments.map((file, i) => {
+                  const url = typeof file === "string" ? file : file.url;
+                  const name = typeof file === "string" ? `ファイル ${i + 1}` : file.name;
+                  return (
+<a key={i} href={url} target="_blank" rel="noopener noreferrer" style={styles.attachmentLink} onClick={(e) => e.stopPropagation()}>
+                      {name}
+</a>
+                  );
+                })}
 </div>
- 
-        <div style={{ display: "flex", gap: 8, marginTop: 20, flexWrap: "wrap" }}>
+</div>
+          )}
+</div>
+<div style={{ display: "flex", gap: 8, marginTop: 20, flexWrap: "wrap" }}>
 <button onClick={() => openProject(project)} style={{ ...styles.primaryButton, flex: "1 1 calc(50% - 4px)" }}>詳細</button>
 <button onClick={(e) => handleSendEmail(e, project)} disabled={project.isClosed} style={{ ...styles.secondaryButton, flex: "1 1 calc(50% - 4px)" }}>メール作成</button>
 <button
@@ -447,12 +434,10 @@ export default function Home() {
 </div>
     );
   };
- 
   return (
 <div style={styles.page}>
 <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
- 
-      <nav style={styles.nav}>
+<nav style={styles.nav}>
 <div style={{ ...styles.navInner, justifyContent: "space-between" }}>
 <div style={{ display: "flex", height: "100%", alignItems: "center" }}>
 <div style={{ marginRight: 30, height: 35, display: "flex", alignItems: "center" }}>
@@ -473,7 +458,6 @@ export default function Home() {
               })}
 </div>
 </div>
- 
           {viewMode === "all" && (
 <div style={{ display: "flex", height: "100%", alignItems: "center" }}>
               {["すべて", "東日本", "中日本", "西日本"].map((regionName) => {
@@ -492,8 +476,7 @@ export default function Home() {
           )}
 </div>
 </nav>
- 
-      <div style={{ display: "flex", padding: "40px 20px", gap: 30, boxSizing: "border-box" }}>
+<div style={{ display: "flex", padding: "40px 20px", gap: 30, boxSizing: "border-box" }}>
 <aside style={styles.sidebar}>
 <h2 style={{ fontSize: "1rem", fontWeight: "bold", marginBottom: 15, color: "#1a365d", borderLeft: "4px solid #1a365d", paddingLeft: 10 }}>カテゴリー</h2>
 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -511,8 +494,7 @@ export default function Home() {
             })}
 </div>
 </aside>
- 
-        <main style={{ flexGrow: 1, maxWidth: 1600 }}>
+<main style={{ flexGrow: 1, maxWidth: 1600 }}>
           {viewMode === "all" && (
 <div style={{ backgroundColor: "#fff", padding: 25, borderRadius: 10, border: "1px solid #e2e8f0", marginBottom: 30 }}>
 <div style={{ position: "relative", marginBottom: 15 }}>
@@ -533,8 +515,7 @@ export default function Home() {
 </div>
                 )}
 </div>
- 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
 <button onClick={() => setShowFilters((v) => !v)} style={{ background: "#f8fafc", border: "1px solid #cbd5e0", borderRadius: 6, padding: "8px 16px", cursor: "pointer", fontSize: "0.85rem", fontWeight: "bold" }}>
                   詳細絞り込み {showFilters ? "▲" : "▼"}
 </button>
@@ -549,10 +530,8 @@ export default function Home() {
 </label>
 </div>
 </div>
- 
               {showFilters && (
 <div style={{ marginTop: 20, borderTop: "1px solid #edf2f7", paddingTop: 20 }}>
-                  {/* カッコ書きエリア表記を削除し「都道府県」のみに修正 */}
 <div style={{ marginBottom: 20 }}>
 <div style={{ marginBottom: 10, fontSize: "0.8rem", fontWeight: "bold", color: "#4a5568" }}>
                       都道府県
@@ -578,7 +557,6 @@ export default function Home() {
                       ))}
 </div>
 </div>
- 
                   {skillCategories.map((category) => (
 <div key={category.label} style={{ marginBottom: 10 }}>
 <div style={{ marginBottom: 10, fontSize: "0.8rem", fontWeight: "bold", color: "#4a5568" }}>{category.label}</div>
@@ -599,13 +577,9 @@ export default function Home() {
               )}
 </div>
           )}
- 
-          {/* 案件カウント件数の表示箇所 */}
 <div style={{ marginBottom: 15, fontSize: "0.9rem", color: "#4a5568", fontWeight: "bold" }}>
             該当案件数: {filteredProjects.length} 件
 </div>
- 
-          {/* ローディング（Loading）＆ メインコンテンツ */}
           {loading ? (
 <div style={styles.spinner} />
           ) : currentItems.length === 0 ? (
@@ -619,7 +593,6 @@ export default function Home() {
 <ProjectCard key={project.id} project={project} />
                 ))}
 </div>
- 
               {totalPages > 1 && (
 <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 20 }}>
                   {paginationRange.map((page, idx) => (
@@ -637,8 +610,6 @@ export default function Home() {
           )}
 </main>
 </div>
- 
-      {/* 詳細表示モーダル */}
       {selectedProject && (
 <div style={styles.modalOverlay} onClick={() => setSelectedProject(null)}>
 <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -655,6 +626,29 @@ export default function Home() {
 <div><strong>【期間】</strong> {selectedProject.period || "記載なし"}</div>
 <div><strong>【募集期間】</strong> {selectedProject.end_date || "記載なし"}</div>
 <div><strong>【スキル】</strong> {selectedProject.skills || "記載なし"}</div>
+              {/* モーダル側の添付ファイル一覧表示 */}
+              {(() => {
+                const pAttachments = !selectedProject.attachments ? [] : 
+                                     Array.isArray(selectedProject.attachments) ? selectedProject.attachments : 
+                                     (() => { try { return JSON.parse(selectedProject.attachments); } catch { return []; } })();
+                if (pAttachments.length === 0) return null;
+                return (
+<div style={{ marginTop: 5, padding: "10px 14px", backgroundColor: "#f7fafc", borderRadius: 8, border: "1px solid #edf2f7" }}>
+<strong style={{ display: "block", marginBottom: 6, color: "#4a5568" }}>📎 添付ファイルダウンロード:</strong>
+<div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                      {pAttachments.map((file, i) => {
+                        const url = typeof file === "string" ? file : file.url;
+                        const name = typeof file === "string" ? `ファイル ${i + 1}` : file.name;
+                        return (
+<a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{ ...styles.attachmentLink, margin: 0 }}>
+                            {name}
+</a>
+                        );
+                      })}
+</div>
+</div>
+                );
+              })()}
 </div>
 <hr style={{ border: "none", borderTop: "1px solid #edf2f7", margin: "20px 0" }} />
 <div style={{ whiteSpace: "pre-wrap", fontSize: "0.9rem", lineHeight: "1.6", color: "#4a5568" }}>
@@ -663,8 +657,6 @@ export default function Home() {
 </div>
 </div>
       )}
- 
-      {/* 削除確認モーダル */}
       {deleteTargetId && (
 <div style={styles.modalOverlay} onClick={() => setDeleteTargetId(null)}>
 <div style={{ ...styles.modalContent, maxWidth: 400, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
