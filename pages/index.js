@@ -213,13 +213,25 @@ export default function Home() {
     }
   };
 
-  // APIからデータを取得
+ // APIから全データをループで取得
   const fetchData = useCallback(async () => {
     setLoading(true);
+    let allProjects = [];
+    let page = 0;
+    let isFetching = true;
+
     try {
-      const res = await fetch("/api/mails");
-      const payload = await res.json();
-      if (!payload || payload.error) return;
+      while (isFetching) {
+        const res = await fetch(`/api/projects?page=${page}`);
+        const payload = await res.json();
+        if (payload.error || !payload.data) break;
+        allProjects = [...allProjects, ...payload.data];
+        if (payload.data.length < 1000) {
+          isFetching = false;
+        } else {
+          page = page + 1;
+        }
+      }
       const favorites = storage.get("favorites");
       const history = storage.get("history");
       const read = storage.get("readProjects");
@@ -228,13 +240,13 @@ export default function Home() {
       setReadIds(read);
       setAppliedIds(applied);
       setProjects(
-        (payload.data || []).map((item) => ({
+        allProjects.map((item) => ({
           ...item,
           favorite: favorites.includes(item.id),
         }))
       );
     } catch (error) {
-      console.error(error);
+      console.error("データ取得エラー:", error);
     } finally {
       setLoading(false);
     }
@@ -451,13 +463,13 @@ export default function Home() {
             </div>
           ))}
 
-          {/* ▼修正箇所1：カード側の添付ファイル一覧表示（有無の明記のみに変更）▼ */}
+          {/* カード側の添付ファイル一覧表示（有無の明記のみに変更）▼ */}
           {attachments.length > 0 && (
             <div style={{ marginTop: 12, fontSize: "0.8rem", color: "#4a5568", fontWeight: "bold", backgroundColor: "#edf2f7", padding: "4px 8px", borderRadius: 4, display: "inline-block" }}>
               📎 添付ファイルあり ({attachments.length})
             </div>
           )}
-          {/* ▲修正箇所1ここまで▲ */}
+          
 
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 20, flexWrap: "wrap" }}>

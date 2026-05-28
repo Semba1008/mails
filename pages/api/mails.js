@@ -12,10 +12,10 @@ export default async function handler(req, res) {
     }
 
     try {
-      // 1. 新しいテーブル構造に合わせて、projects_id に紐づく file_path (またはfile_url) を取得
+      // 1. attachments テーブルから紐づくファイルURLを取得
       const { data: attachments, error: fetchError } = await supabase
         .from('attachments')
-        .select('file_url') // カラム名に合わせてfile_urlを指定 (file_pathの場合は書き換えてください)
+        .select('file_url')
         .eq('projects_id', id);
 
       if (fetchError) {
@@ -23,10 +23,9 @@ export default async function handler(req, res) {
       } else if (attachments && attachments.length > 0) {
         // 2. 紐づくファイルがストレージにあれば一括削除
         const fileNames = attachments.map(file => {
-          if (!file.file_url) return null;
-          // フルパスやURLからファイル名（またはストレージ内パス）部分を抽出
-          const urlParts = file.file_url.split('/');
-          return urlParts[urlParts.length - 1];
+        if (!file.file_url) return null;
+        // URLからファイルパスを正しく抽出する（例: https://.../FILES/folder/my-file.txt -> folder/my-file.txt）
+        return file.file_url.split('/FILES/')[1]; 
         }).filter(Boolean);
 
         if (fileNames.length > 0) {
@@ -41,7 +40,7 @@ export default async function handler(req, res) {
         }
       }
 
-      // 3. プロジェクト本体を削除 (CASCADE設定がない場合でも、これで安全に削除)
+      // 3. プロジェクト本体を削除
       const { error: projectDeleteError } = await supabase
         .from('projects')
         .delete()
@@ -61,18 +60,25 @@ export default async function handler(req, res) {
   // ==========================================
   if (req.method === 'GET') {
     try {
-      // 実際のテーブルのカラム名 (id, file_name, file_url) に合わせて取得
+      // フロントエンドからページ番号を受け取る (例: /api/projects?page=0)
+      // 指定がなければ 0 ページ目とする
+      const page = parseInt(req.query.page) || 0;
+      const pageSize = 1000;
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+
       const { data, error } = await supabase
         .from('projects')
         .select(`
           *,
-          attachments (
+          attachments!attachments_projects_id_fkey (
             id,
             file_name,
             file_url
           )
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, to); // 👈 1,000件ずつ範囲を指定して取得
 
       if (error) {
         return res.status(500).json({ data: null, error: error.message });
@@ -84,5 +90,6 @@ export default async function handler(req, res) {
     }
   }
 
+  // 許可されていないメソッドへの対応
   return res.status(405).json({ error: 'Method Not Allowed' });
 }
