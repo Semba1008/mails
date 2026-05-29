@@ -178,7 +178,7 @@ export default function Home() {
   const [selectedRegion, setSelectedRegion] = useState("すべて");
 
   // supabaseから添付ファイル情報を取得して、 機械語（バイナリデータ）をファイルに復元してダウンロードする
-  const handleDownloadFile = async (event, fileUrl, fileName) => {
+ const handleDownloadFile = async (event, fileUrl, fileName) => {
   event.preventDefault();
   event.stopPropagation();
 
@@ -188,16 +188,11 @@ export default function Home() {
   }
 
   try {
-    // 1. URLからパス部分とファイル名部分を分離する
-    const lastSlashIndex = fileUrl.lastIndexOf('/');
-    const baseUrl = fileUrl.substring(0, lastSlashIndex + 1); // URLのベース部分
-    const rawFileName = fileUrl.substring(lastSlashIndex + 1); // 日本語ファイル名部分
+    // 1. URLを一旦デコードして「生の文字列」に戻す（二重エンコード防止）
+    // 2. その上で、encodeURI を使ってURL全体を「Web標準の形式」に変換する
+    //    これでスペースが %20 に正しく変換されます。
+    const safeUrl = encodeURI(decodeURI(fileUrl));
 
-    // 2. ファイル名部分だけをエンコードする
-    const encodedFileName = encodeURIComponent(rawFileName);
-    const safeUrl = baseUrl + encodedFileName;
-
-    // 3. エンコード済みのURLで取得する
     const response = await fetch(safeUrl);
     if (!response.ok) {
       throw new Error(`ファイルの取得に失敗しました (Status: ${response.status})`);
@@ -208,8 +203,7 @@ export default function Home() {
 
     const link = document.createElement("a");
     link.href = tempUrl;
-    // ダウンロード時の名前は元の名前を使用
-    link.download = fileName || rawFileName;
+    link.download = fileName || "download_file";
     document.body.appendChild(link);
     link.click();
 
@@ -217,8 +211,8 @@ export default function Home() {
     window.URL.revokeObjectURL(tempUrl);
   } catch (error) {
     console.error("ダウンロードエラー:", error);
-    // エラー時はブラウザに直接開かせることで回避策とする
-    window.open(fileUrl, '_blank');
+    // 最終手段としてブラウザで直接開く
+    window.open(encodeURI(decodeURI(fileUrl)), '_blank');
   }
 };
 
