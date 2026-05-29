@@ -103,7 +103,7 @@ export default async function handler(req, res) {
       .from('projects')
       .select(`
        *,
-       attachments!attachments_attachments.projects_id_fkey (
+       attachments!attachments_projects_id_fkey (
          id,
          file_name,
          file_url
