@@ -189,7 +189,7 @@ export default function Home() {
     }
     return [];
   });
- 
+ // 検索キーワードを履歴に保存する関数。重複は削除して最新のものを先頭に、最大20件まで保持します
   const handleSearchSubmit = (keyword) => {
     if (!keyword || !keyword.trim()) return;
     const trimmed = keyword.trim();
