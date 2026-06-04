@@ -302,12 +302,23 @@ export default function Home() {
     }
   }, [selectedPrefs]);
  
-  // フィルタリング処理
+ // フィルタリング処理
   const filteredProjects = useMemo(() => {
     const query = searchQuery.toLowerCase();
     const currentRegionData = regionalPrefectures.find((r) => r.region === selectedRegion);
     const allowedPrefsNormalized = currentRegionData ? currentRegionData.prefs.map(normalize) : [];
+    // 🕒 現在から1年（365日）前の日時を計算
+    const oneYearAgo = new Date();
+    oneYearAgo.setDate(oneYearAgo.getDate() - 365);
+ 
     return projects.filter((project) => {
+      // 📅 直近1年以内の案件かチェック（created_at を使用）
+      if (project.created_at) {
+        const projectDate = new Date(project.created_at);
+        // 作成日時が1年前よりも古い場合は非表示（除外）
+        if (projectDate < oneYearAgo) return false;
+      }
+ 
       if (hideClosed && project.isClosed) return false;
       const isApplied = appliedIds.includes(project.id);
       if (viewMode === "applied") return isApplied;
@@ -339,10 +350,8 @@ export default function Home() {
       return searchableText.includes(query) && matchesSkill && matchesRemote;
     });
   }, [appliedIds, favFilters, hideClosed, historyIds, isRemoteOnly, projects, searchQuery, selectedPrefs, selectedSkills, viewMode, selectedRegion]);
- 
   const totalPages = Math.ceil(filteredProjects.length / PAGE_SIZE);
   const currentItems = filteredProjects.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
- 
   // ページネーション範囲計算
   const paginationRange = useMemo(() => {
     const siblingCount = 2;
