@@ -1528,9 +1528,9 @@ return projects
                       cursor:
                         currentPage === totalPages ? "not-allowed" : "pointer",
                     }}
-                    title="5ページ次へ"
+                   
                   >
-                    次のページ
+                    5ページ次へ
                   </button>
 
                   {/* 最後のページへ一気に飛ぶ */}
@@ -1543,7 +1543,7 @@ return projects
                       cursor:
                         currentPage === totalPages ? "not-allowed" : "pointer",
                     }}
-                    title="最後のページへ"
+                    
                   >
                     最終ページ
                   </button>
