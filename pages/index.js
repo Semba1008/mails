@@ -1448,7 +1448,7 @@ return projects
                       opacity: currentPage === 1 ? 0.5 : 1,
                       cursor: currentPage === 1 ? "not-allowed" : "pointer",
                     }}
-                    title="最初のページへ"
+                    
                   >
                     最初のページ
                   </button>
@@ -1462,9 +1462,9 @@ return projects
                       opacity: currentPage === 1 ? 0.5 : 1,
                       cursor: currentPage === 1 ? "not-allowed" : "pointer",
                     }}
-                    title="5ページ前へ"
+                    
                   >
-                    前のページ
+                    5ページ前へ
                   </button>
 
                   {/* 1ページ前に戻る */}
