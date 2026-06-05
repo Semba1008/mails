@@ -302,177 +302,109 @@ export default function Home() {
     }
   }, [selectedPrefs]);
  
- // フィルタリング処理
+  // フィルタリング処理
   const filteredProjects = useMemo(() => {
-
-  const query = searchQuery.toLowerCase();
-
-  const currentRegionData =
-    regionalPrefectures.find(
-      (r) => r.region === selectedRegion
-    );
-
-  const allowedPrefsNormalized =
-    currentRegionData
-      ? currentRegionData.prefs.map(normalize)
-      : [];
-
-  // 1年前
-  const oneYearAgo = new Date();
-
-  oneYearAgo.setDate(
-    oneYearAgo.getDate() - 365
-  );
-  // 募集停止の基準を作成日から20日後に変更
-  return projects.filter((project) => {
-
-    // 作成日チェック
-    if (project.created_at) {
-
-      const projectDate =
-        new Date(project.created_at);
-
-      // 1年以上前は非表示
-      if (projectDate < oneYearAgo) {
-        return false;
+    const query = searchQuery.toLowerCase();
+    const currentRegionData = regionalPrefectures.find((r) => r.region === selectedRegion);
+    const allowedPrefsNormalized = currentRegionData ? currentRegionData.prefs.map(normalize) : [];
+    return projects.filter((project) => {
+      if (hideClosed && project.isClosed) return false;
+      const isApplied = appliedIds.includes(project.id);
+      if (viewMode === "applied") return isApplied;
+      if (isApplied) return false;
+      if (viewMode === "favorites") return project.favorite;
+      if (viewMode === "history") return historyIds.includes(project.id);
+      if (favFilters.length) {
+        const categories = getProjectCategories(project);
+        if (!favFilters.every((filter) => categories.includes(filter))) return false;
       }
-
-      // 停止前タグ
-      const warningDate =
-        new Date(projectDate);
-
-      warningDate.setDate(
-        warningDate.getDate() + 20
-      );
-
-      project.isExpiringSoon =
-        new Date() >= warningDate;
-
-    } else {
-
-      project.isExpiringSoon = false;
-    }
-
-    // ===== ここから元の処理 =====
-
-    if (hideClosed && project.isClosed) {
-      return false;
-    }
-
-    const isApplied =
-      appliedIds.includes(project.id);
-
-    if (viewMode === "applied") {
-      return isApplied;
-    }
-
-    if (isApplied) {
-      return false;
-    }
-
-    if (viewMode === "favorites") {
-      return project.favorite;
-    }
-
-    if (viewMode === "history") {
-      return historyIds.includes(project.id);
-    }
-
-    if (favFilters.length) {
-
-      const categories =
-        getProjectCategories(project);
-
-      if (
-        !favFilters.every((filter) =>
-          categories.includes(filter)
-        )
-      ) {
-        return false;
-      }
-    }
-
-    const pureContent =
-      removeSignature(project.content || "");
-
-    const searchableText =
-      `${project.title || ""}
-      ${project.skills || ""}
-      ${pureContent}
-      ${project.location || ""}`
-      .toLowerCase();
-
-    const projectLocation =
-      (project.location || "").trim();
-
-    const projectPrefNormalized =
-      normalize(projectLocation);
-
-    if (
-      viewMode === "all" &&
-      selectedRegion !== "すべて"
-    ) {
-
-      const matchesRegion =
-        allowedPrefsNormalized.some((pref) => {
+      const pureContent = removeSignature(project.content || "");
+      const searchableText = `${project.title || ""}${project.skills || ""}${pureContent}${project.location || ""}`.toLowerCase();
+      const projectLocation = (project.location || "").trim();
+      const projectPrefNormalized = normalize(projectLocation);
+      if (viewMode === "all" && selectedRegion !== "すべて") {
+        const matchesRegion = allowedPrefsNormalized.some((pref) => {
           return projectPrefNormalized.startsWith(pref);
         });
-
-      if (!matchesRegion) {
-        return false;
+        if (!matchesRegion) return false;
       }
-    }
-
-    if (selectedPrefs.length) {
-
-      const matchesPref =
-        selectedPrefs.some((pref) => {
-          return projectPrefNormalized.startsWith(
-            normalize(pref)
-          );
+      if (selectedPrefs.length) {
+        const matchesPref = selectedPrefs.some((pref) => {
+          return projectPrefNormalized.startsWith(normalize(pref));
         });
-
-      if (!matchesPref) {
-        return false;
+        if (!matchesPref) return false;
       }
+      const matchesSkill = !selectedSkills.length || selectedSkills.every((skill) => searchableText.includes(skill.toLowerCase()));
+      const matchesRemote = !isRemoteOnly || [project.location, project.title, pureContent].some((text) => text?.includes("リモート"));
+      return searchableText.includes(query) && matchesSkill && matchesRemote;
+    });
+  }, [appliedIds, favFilters, hideClosed, historyIds, isRemoteOnly, projects, searchQuery, selectedPrefs, selectedSkills, viewMode, selectedRegion]);
+ 
+  const totalPages = Math.ceil(filteredProjects.length / PAGE_SIZE);
+  const currentItems = filteredProjects.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+ 
+  // ページネーション範囲計算
+  const paginationRange = useMemo(() => {
+    const siblingCount = 2;
+    const totalPageNumbers = siblingCount * 2 + 5;
+    if (totalPageNumbers >= totalPages) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const leftSiblingIndex = Math.max(currentPage - siblingCount, 1);
+    const rightSiblingIndex = Math.min(currentPage + siblingCount, totalPages);
+    const shouldShowLeftDots = leftSiblingIndex > 2;
+    const shouldShowRightDots = rightSiblingIndex < totalPages - 2;
+    if (!shouldShowLeftDots && shouldShowRightDots) {
+      return Array.from({ length: 3 + 2 * siblingCount }, (_, i) => i + 1);
     }
-
-    const matchesSkill =
-      !selectedSkills.length ||
-      selectedSkills.every((skill) =>
-        searchableText.includes(
-          skill.toLowerCase()
-        )
-      );
-
-    const matchesRemote =
-      !isRemoteOnly ||
-      [project.location, project.title, pureContent]
-        .some((text) =>
-          text?.includes("リモート")
-        );
-
-    return (
-      searchableText.includes(query) &&
-      matchesSkill &&
-      matchesRemote
-    );
-
-  });
-
-}, [
-  appliedIds,
-  favFilters,
-  hideClosed,
-  historyIds,
-  isRemoteOnly,
-  projects,
-  searchQuery,
-  selectedPrefs,
-  selectedSkills,
-  viewMode,
-  selectedRegion
-]);
+    if (shouldShowLeftDots && !shouldShowRightDots) {
+      const rightItemCount = 3 + 2 * siblingCount;
+      return Array.from({ length: rightItemCount }, (_, i) => totalPages - rightItemCount + i + 1);
+    }
+    if (shouldShowLeftDots && shouldShowRightDots) {
+      return Array.from({ length: rightSiblingIndex - leftSiblingIndex + 1 }, (_, i) => leftSiblingIndex + i);
+    }
+    return [];
+  }, [currentPage, totalPages]);
+ 
+  const changePage = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+ 
+  const toggleSelection = (item, selected, setter) => {
+    setter(selected.includes(item) ? selected.filter((value) => value !== item) : [...selected, item]);
+    setCurrentPage(1);
+  };
+ 
+  const toggleFavorite = (event, id) => {
+    event.stopPropagation();
+    const updated = projects.map((p) => p.id === id ? { ...p, favorite: !p.favorite } : p);
+    setProjects(updated);
+    storage.set("favorites", updated.filter((p) => p.favorite).map((p) => p.id));
+  };
+ 
+  const toggleApplied = (event, id) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const updated = appliedIds.includes(id) ? appliedIds.filter((itemId) => itemId !== id) : [...appliedIds, id];
+    setAppliedIds(updated);
+    storage.set("appliedIds", updated);
+  };
+ 
+  const openProject = (project) => {
+    setSelectedProject(project);
+    const historyData = storage.get("history");
+    if (!historyData.includes(project.id)) {
+      const updated = [project.id, ...historyData].slice(0, 50);
+      storage.set("history", updated);
+      setHistoryIds(updated);
+    }
+    const reads = storage.get("readProjects");
+    if (!reads.includes(project.id)) {
+      const updated = [...reads, project.id];
+      storage.set("readProjects", updated);
+      setReadIds(updated);
+    }
+  };
  
   const handleSendEmail = (event, project) => {
     event.preventDefault();
