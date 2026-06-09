@@ -216,21 +216,33 @@ const extractRecruitment = (content = "") => {
   const match = content.match(/([0-9０-９]+|複数|若干)名(以上)?/);
   return match?.[0] || "記載なし";
 };
-// 案件のカテゴリ判定
+// 案件のカテゴリ判定（ノイズ削減＆高精度版）
 const getProjectCategories = (project) => {
-  const text =
-    `${project.title || ""}${project.content || ""}${project.skills || ""}`.toLowerCase();
+  // 1. 長い本文(content)は無視して、ノイズの少ない「タイトル」と「AI抽出スキル」だけを合体
+  const coreText = `${project.title || ""}${project.skills || ""}`.toLowerCase();
   const categories = [];
-  if (
-    /java|php|python|ruby|go|c#|react|next\.js|vue\.js|typescript|javascript|フロントエンド|バックエンド|アプリ|開発/i.test(
-      text,
-    )
-  )
-    categories.push("dev");
-  if (/インフラ|サーバ|ネットワーク|aws|azure|gcp|cloud|監視|構築/i.test(text))
-    categories.push("infra");
-  if (/組み込み|組込|マイコン|制御|c言語|c\+\+|embedded/i.test(text))
-    categories.push("embedded");
+
+  // 2. 単語の「完全一致」や「前後関係」を意識した優秀な判定ルール（正規表現）
+  
+  // 【開発（dev）の判定】
+  // 単に「c」単体だと別の文字に誤反応するため、c#やc++、あるいは明確な開発言語としてチェック
+  const hasDev = /java(script)?|php|python|ruby|go|c#|react|next\.js|vue\.js|typescript|フロントエンド|バックエンド|アプリ|開発/i.test(coreText);
+  
+  // 【インフラ（infra）の判定】
+  // 「サーバー」や「クラウド」といった明確なインフラ単語、主要クラウドサービスをチェック
+  const hasInfra = /インフラ|サーバ|ネットワーク|aws|azure|gcp|cloud|監視|構築|ルータ|シスコ|cisco/i.test(coreText);
+  
+  // 【組み込み（embedded）の判定】
+  // 組み込み特有のキーワードや、c言語/c++をここでキャッチ
+  const hasEmbedded = /組み込み|組込|マイコン|制御|c言語|c\+\+|embedded|ファームウェア/i.test(coreText);
+
+  // 3. 該当したカテゴリをすべてカゴ（配列）に入れる
+  if (hasDev) categories.push("dev");
+  if (hasInfra) categories.push("infra");
+  if (hasEmbedded) categories.push("embedded");
+
+  // 4. もしどれにも引っかからなかった場合の安全対策
+  // タイトル等に技術名が全く書かれていない特殊な案件は、デフォルトで「dev」にします
   return categories.length ? categories : ["dev"];
 };
 // スタイル定義
