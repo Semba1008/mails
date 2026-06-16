@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
+ 
 const LINK_STYLE = { color: "#3182ce", textDecoration: "underline" };
 // 1ページあたりの表示件数
 const PAGE_SIZE = 24;
@@ -216,33 +218,21 @@ const extractRecruitment = (content = "") => {
   const match = content.match(/([0-9０-９]+|複数|若干)名(以上)?/);
   return match?.[0] || "記載なし";
 };
-// 案件のカテゴリ判定（ノイズ削減＆高精度版）
+// 案件のカテゴリ判定
 const getProjectCategories = (project) => {
-  // 1. 長い本文(content)は無視して、ノイズの少ない「タイトル」と「AI抽出スキル」だけを合体
-  const coreText = `${project.title || ""}${project.skills || ""}`.toLowerCase();
+  const text =
+    `${project.title || ""}${project.content || ""}${project.skills || ""}`.toLowerCase();
   const categories = [];
-
-  // 2. 単語の「完全一致」や「前後関係」を意識した優秀な判定ルール（正規表現）
-  
-  // 【開発（dev）の判定】
-  // 単に「c」単体だと別の文字に誤反応するため、c#やc++、あるいは明確な開発言語としてチェック
-  const hasDev = /java(script)?|php|python|ruby|go|c#|react|next\.js|vue\.js|typescript|フロントエンド|バックエンド|アプリ|開発/i.test(coreText);
-  
-  // 【インフラ（infra）の判定】
-  // 「サーバー」や「クラウド」といった明確なインフラ単語、主要クラウドサービスをチェック
-  const hasInfra = /インフラ|サーバ|ネットワーク|aws|azure|gcp|cloud|監視|構築|ルータ|シスコ|cisco/i.test(coreText);
-  
-  // 【組み込み（embedded）の判定】
-  // 組み込み特有のキーワードや、c言語/c++をここでキャッチ
-  const hasEmbedded = /組み込み|組込|マイコン|制御|c言語|c\+\+|embedded|ファームウェア/i.test(coreText);
-
-  // 3. 該当したカテゴリをすべてカゴ（配列）に入れる
-  if (hasDev) categories.push("dev");
-  if (hasInfra) categories.push("infra");
-  if (hasEmbedded) categories.push("embedded");
-
-  // 4. もしどれにも引っかからなかった場合の安全対策
-  // タイトル等に技術名が全く書かれていない特殊な案件は、デフォルトで「dev」にします
+  if (
+    /java|php|python|ruby|go|c#|react|next\.js|vue\.js|typescript|javascript|フロントエンド|バックエンド|アプリ|開発/i.test(
+      text,
+    )
+  )
+    categories.push("dev");
+  if (/インフラ|サーバ|ネットワーク|aws|azure|gcp|cloud|監視|構築/i.test(text))
+    categories.push("infra");
+  if (/組み込み|組込|マイコン|制御|c言語|c\+\+|embedded/i.test(text))
+    categories.push("embedded");
   return categories.length ? categories : ["dev"];
 };
 // スタイル定義
@@ -361,11 +351,13 @@ const styles = {
     fontWeight: "500",
   },
 };
-
+ 
 // メインコンポーネント
 export default function Home() {
-  const [projects, setProjects] = useState([]);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
@@ -382,7 +374,45 @@ export default function Home() {
   const [appliedIds, setAppliedIds] = useState([]);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [selectedRegion, setSelectedRegion] = useState("すべて");
-
+  useEffect(() => {
+    const checkLogin = async () => {
+      try {
+        const res = await fetch("/api/me", {
+          credentials: "include",
+        });
+ 
+        if (!res.ok) {
+          window.location.href = "/login";
+          return;
+        }
+ 
+        const data = await res.json();
+        setUser(data);
+        setAuthChecked(true);
+      } catch {
+        window.location.href = "/login";
+      }
+    };
+ 
+    checkLogin();
+  }, []);
+ 
+  const router = useRouter();
+ 
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+ 
+      router.push("/login");
+    } catch (error) {
+      console.error(error);
+      alert("ログアウトに失敗しました");
+    }
+  };
+ 
   // 🕒 検索履歴用のStateと保存関数（内部的な保存枠は余裕を持って20件に広げています）
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [history, setHistory] = useState(() => {
@@ -408,17 +438,17 @@ export default function Home() {
       return next;
     });
   };
-
+ 
   // supabaseから添付ファイル情報を取得して、 機械語（バイナリデータ）をファイルに復元してダウンロードする
   const handleDownloadFile = async (event, fileUrl, fileName) => {
     event.preventDefault();
     event.stopPropagation();
-
+ 
     if (!fileUrl) {
       alert("ファイルURLが存在しません。");
       return;
     }
-
+ 
     try {
       const safeUrl = encodeURI(decodeURI(fileUrl));
       const response = await fetch(safeUrl);
@@ -427,16 +457,16 @@ export default function Home() {
           `ファイルの取得に失敗しました (Status: ${response.status})`,
         );
       }
-
+ 
       const blob = await response.blob();
       const tempUrl = window.URL.createObjectURL(blob);
-
+ 
       const link = document.createElement("a");
       link.href = tempUrl;
       link.download = fileName || "download_file";
       document.body.appendChild(link);
       link.click();
-
+ 
       document.body.removeChild(link);
       window.URL.revokeObjectURL(tempUrl);
     } catch (error) {
@@ -444,14 +474,14 @@ export default function Home() {
       window.open(encodeURI(decodeURI(fileUrl)), "_blank");
     }
   };
-
+ 
   // APIから全データをループで取得
   const fetchData = useCallback(async () => {
     setLoading(true);
     let allProjects = [];
     let page = 0;
     let isFetching = true;
-
+ 
     try {
       while (isFetching) {
         const res = await fetch(`/api/mails?page=${page}`);
@@ -483,11 +513,11 @@ export default function Home() {
       setLoading(false);
     }
   }, []);
-
+ 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
+ 
   // 駅名サジェスト取得
   const fetchStations = useCallback(
     async (keyword) => {
@@ -522,152 +552,123 @@ export default function Home() {
     },
     [selectedPrefs],
   );
-
+ 
   // フィルタリング処理
   const filteredProjects = useMemo(() => {
     const query = searchQuery.toLowerCase();
-
+ 
     const currentRegionData = regionalPrefectures.find(
       (r) => r.region === selectedRegion,
     );
-
+ 
     const allowedPrefsNormalized = currentRegionData
       ? currentRegionData.prefs.map(normalize)
       : [];
-
-    // 1年前の日付を計算 
+ 
+    // 1年前の日付を計算
     const oneYearAgo = new Date();
-
+ 
     oneYearAgo.setDate(oneYearAgo.getDate() - 365);
-
-// 案件ごとに、募集終了が近いかどうかを判定してフラグを付与
-return projects
-  .map((project) => {
-    let isExpiringSoon = false;
-
-    if (project.created_at) {
-      const projectDate = new Date(project.created_at);
-
-      if (projectDate >= oneYearAgo) {
-        const warningDate = new Date(projectDate);
-
-        // 20日経過で警告
-        warningDate.setDate(warningDate.getDate() + 20);
-
-        isExpiringSoon =
-          new Date() >= warningDate;
-      }
-    }
-
-    return {
-      ...project,
-      isExpiringSoon,
-    };
-  })
-  .filter((project) => {
-    // 1年以上前は非表示
-    if (project.created_at) {
-      const projectDate = new Date(project.created_at);
-
-      if (projectDate < oneYearAgo) {
-        return false;
-      }
-    }
-
-    if (hideClosed && project.isClosed) return false;
-
-    const isApplied = appliedIds.includes(project.id);
-
-    if (viewMode === "applied") return isApplied;
-
-    if (isApplied) return false;
-
-    if (viewMode === "favorites") return project.favorite;
-
-    if (viewMode === "history") {
-      return historyIds.includes(project.id);
-    }
-
-    if (favFilters.length) {
-      const categories = getProjectCategories(project);
-
-      if (
-        !favFilters.every((filter) =>
-          categories.includes(filter),
-        )
-      ) {
-        return false;
-      }
-    }
-
-    const pureContent =
-      removeSignature(project.content || "");
-
-    const searchableText =
-      `${project.title || ""}${
-        project.skills || ""
-      }${pureContent}${
-        project.location || ""
-      }`.toLowerCase();
-
-    const projectLocation =
-      (project.location || "").trim();
-
-    const projectPrefNormalized =
-      normalize(projectLocation);
-
-    // 地域フィルタ
-    if (
-      viewMode === "all" &&
-      selectedRegion !== "すべて"
-    ) {
-      const matchesRegion =
-        allowedPrefsNormalized.some((pref) =>
-          projectPrefNormalized.startsWith(pref),
-        );
-
-      if (!matchesRegion) return false;
-    }
-
-    // 都道府県フィルタ
-    if (selectedPrefs.length) {
-      const matchesPref =
-        selectedPrefs.some((pref) =>
-          projectPrefNormalized.startsWith(
-            normalize(pref),
-          ),
-        );
-
-      if (!matchesPref) return false;
-    }
-
-    // スキル一致
-    const matchesSkill =
-      !selectedSkills.length ||
-      selectedSkills.every((skill) =>
-        searchableText.includes(
-          skill.toLowerCase(),
-        ),
-      );
-
-    // リモート案件
-    const matchesRemote =
-      !isRemoteOnly ||
-      [
-        project.location,
-        project.title,
-        pureContent,
-      ].some((text) =>
-        text?.includes("リモート"),
-      );
-
-    return (
-      searchableText.includes(query) &&
-      matchesSkill &&
-      matchesRemote
-    );
-  });
-
+ 
+    // 案件ごとに、募集終了が近いかどうかを判定してフラグを付与
+    return projects
+      .map((project) => {
+        let isExpiringSoon = false;
+ 
+        if (project.created_at) {
+          const projectDate = new Date(project.created_at);
+ 
+          if (projectDate >= oneYearAgo) {
+            const warningDate = new Date(projectDate);
+ 
+            // 20日経過で警告
+            warningDate.setDate(warningDate.getDate() + 20);
+ 
+            isExpiringSoon = new Date() >= warningDate;
+          }
+        }
+ 
+        return {
+          ...project,
+          isExpiringSoon,
+        };
+      })
+      .filter((project) => {
+        // 1年以上前は非表示
+        if (project.created_at) {
+          const projectDate = new Date(project.created_at);
+ 
+          if (projectDate < oneYearAgo) {
+            return false;
+          }
+        }
+ 
+        if (hideClosed && project.isClosed) return false;
+ 
+        const isApplied = appliedIds.includes(project.id);
+ 
+        if (viewMode === "applied") return isApplied;
+ 
+        if (isApplied) return false;
+ 
+        if (viewMode === "favorites") return project.favorite;
+ 
+        if (viewMode === "history") {
+          return historyIds.includes(project.id);
+        }
+ 
+        if (favFilters.length) {
+          const categories = getProjectCategories(project);
+ 
+          if (!favFilters.every((filter) => categories.includes(filter))) {
+            return false;
+          }
+        }
+ 
+        const pureContent = removeSignature(project.content || "");
+ 
+        const searchableText = `${project.title || ""}${
+          project.skills || ""
+        }${pureContent}${project.location || ""}`.toLowerCase();
+ 
+        const projectLocation = (project.location || "").trim();
+ 
+        const projectPrefNormalized = normalize(projectLocation);
+ 
+        // 地域フィルタ
+        if (viewMode === "all" && selectedRegion !== "すべて") {
+          const matchesRegion = allowedPrefsNormalized.some((pref) =>
+            projectPrefNormalized.startsWith(pref),
+          );
+ 
+          if (!matchesRegion) return false;
+        }
+ 
+        // 都道府県フィルタ
+        if (selectedPrefs.length) {
+          const matchesPref = selectedPrefs.some((pref) =>
+            projectPrefNormalized.startsWith(normalize(pref)),
+          );
+ 
+          if (!matchesPref) return false;
+        }
+ 
+        // スキル一致
+        const matchesSkill =
+          !selectedSkills.length ||
+          selectedSkills.every((skill) =>
+            searchableText.includes(skill.toLowerCase()),
+          );
+ 
+        // リモート案件
+        const matchesRemote =
+          !isRemoteOnly ||
+          [project.location, project.title, pureContent].some((text) =>
+            text?.includes("リモート"),
+          );
+ 
+        return searchableText.includes(query) && matchesSkill && matchesRemote;
+      });
   }, [
     appliedIds,
     favFilters,
@@ -681,14 +682,14 @@ return projects
     viewMode,
     selectedRegion,
   ]);
-
+ 
   const totalPages = Math.ceil(filteredProjects.length / PAGE_SIZE);
-
+ 
   const currentItems = filteredProjects.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE,
   );
-
+ 
   // ページネーション範囲計算
   const paginationRange = useMemo(() => {
     const siblingCount = 2;
@@ -717,27 +718,27 @@ return projects
     }
     return [];
   }, [currentPage, totalPages]);
-const changePage = (pageNumber) => {
-  setCurrentPage(pageNumber);
-};
-
-const toggleSelection = (item, selected, setter) => {
-  setter(
-    selected.includes(item)
-      ? selected.filter((value) => value !== item)
-      : [...selected, item],
-  );
-
-  setCurrentPage(1);
-};
-
-useEffect(() => {
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth",
-  });
-}, [currentPage]);
-
+  const changePage = (pageNumber) => {
+    setCurrentPage(pageNumber);
+  };
+ 
+  const toggleSelection = (item, selected, setter) => {
+    setter(
+      selected.includes(item)
+        ? selected.filter((value) => value !== item)
+        : [...selected, item],
+    );
+ 
+    setCurrentPage(1);
+  };
+ 
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }, [currentPage]);
+ 
   const toggleFavorite = (event, id) => {
     event.stopPropagation();
     const updated = projects.map((p) =>
@@ -749,7 +750,7 @@ useEffect(() => {
       updated.filter((p) => p.favorite).map((p) => p.id),
     );
   };
-
+ 
   const toggleApplied = (event, id) => {
     event.preventDefault();
     event.stopPropagation();
@@ -759,7 +760,7 @@ useEffect(() => {
     setAppliedIds(updated);
     storage.set("appliedIds", updated);
   };
-
+ 
   const openProject = (project) => {
     setSelectedProject(project);
     const historyData = storage.get("history");
@@ -775,7 +776,7 @@ useEffect(() => {
       setReadIds(updated);
     }
   };
-
+ 
   const handleSendEmail = (event, project) => {
     event.preventDefault();
     event.stopPropagation();
@@ -786,7 +787,7 @@ useEffect(() => {
       ? `mailto:${targetEmail}?cc=${encodeURIComponent(ccEmail)}`
       : `mailto:${targetEmail}`;
   };
-
+ 
   const handleExecuteDelete = async () => {
     if (!deleteTargetId) return;
     try {
@@ -810,7 +811,7 @@ useEffect(() => {
       setDeleteTargetId(null);
     }
   };
-
+ 
   const filterablePrefectures = useMemo(() => {
     if (selectedRegion === "すべて") {
       return regionalPrefectures.flatMap((r) => r.prefs);
@@ -819,7 +820,7 @@ useEffect(() => {
       regionalPrefectures.find((r) => r.region === selectedRegion)?.prefs || []
     );
   }, [selectedRegion]);
-
+ 
   const ProjectCard = ({ project }) => {
     const isRead = readIds.includes(project.id);
     const isApplied = appliedIds.includes(project.id);
@@ -832,8 +833,8 @@ useEffect(() => {
         return [];
       }
     }, [project.attachments]);
-
-    return (
+ 
+ return (
       <div style={{ ...styles.card, opacity: project.isClosed ? 0.7 : 1 }}>
         <div style={{ fontSize: "0.7rem", color: "#a0aec0", marginBottom: 5 }}>
           ID: {project.id}
@@ -921,7 +922,7 @@ useEffect(() => {
               <span>{value}</span>
             </div>
           ))}
-
+ 
           {attachments.length > 0 && (
             <div
               style={{
@@ -992,7 +993,15 @@ useEffect(() => {
       </div>
     );
   };
-
+ 
+  if (!authChecked) {
+    return <div>認証チェック中...</div>;
+  }
+ 
+  if (!user) {
+    return <div>ログインが必要です</div>;
+  }
+ 
   return (
     <div style={styles.page}>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
@@ -1078,6 +1087,21 @@ useEffect(() => {
                   </button>
                 );
               })}
+              <button
+                onClick={handleLogout}
+                style={{
+                  marginLeft: 20,
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  border: "1px solid #e53e3e",
+                  background: "#fff",
+                  color: "#e53e3e",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                }}
+              >
+                ログアウト
+              </button>
             </div>
           )}
         </div>
@@ -1180,7 +1204,7 @@ useEffect(() => {
                     boxSizing: "border-box",
                   }}
                 />
-
+ 
                 {showSuggestions && history.length > 0 && (
                   /* 🟢 max-heightを履歴5件分相当の「220px」に固定し、あふれたらスクロール（overflowY: "auto"）にしました */
                   <div
@@ -1238,7 +1262,6 @@ useEffect(() => {
                     ))}
                   </div>
                 )}
-
               </div>
               <div
                 style={{
@@ -1466,11 +1489,10 @@ useEffect(() => {
                       opacity: currentPage === 1 ? 0.5 : 1,
                       cursor: currentPage === 1 ? "not-allowed" : "pointer",
                     }}
-                    
                   >
                     最初のページ
                   </button>
-
+ 
                   {/* 5ページ前に戻る */}
                   <button
                     onClick={() => changePage(Math.max(currentPage - 5, 1))}
@@ -1480,11 +1502,10 @@ useEffect(() => {
                       opacity: currentPage === 1 ? 0.5 : 1,
                       cursor: currentPage === 1 ? "not-allowed" : "pointer",
                     }}
-                    
                   >
                     5ページ前へ
                   </button>
-
+ 
                   {/* 1ページ前に戻る */}
                   <button
                     onClick={() => changePage(Math.max(currentPage - 1, 1))}
@@ -1498,7 +1519,7 @@ useEffect(() => {
                   >
                     ‹
                   </button>
-
+ 
                   {/* 通常のページ番号ボタン */}
                   {paginationRange.map((page, idx) => (
                     <button
@@ -1516,7 +1537,7 @@ useEffect(() => {
                       {page}
                     </button>
                   ))}
-
+ 
                   {/* 1ページ次に進む */}
                   <button
                     onClick={() =>
@@ -1526,13 +1547,14 @@ useEffect(() => {
                     style={{
                       ...styles.pageBtn,
                       opacity: currentPage === totalPages ? 0.5 : 1,
-                      cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                      cursor:
+                        currentPage === totalPages ? "not-allowed" : "pointer",
                     }}
                     title="次へ"
                   >
                     ›
                   </button>
-
+ 
                   {/* 5ページ次に進む */}
                   <button
                     onClick={() =>
@@ -1542,13 +1564,13 @@ useEffect(() => {
                     style={{
                       ...styles.pageBtn,
                       opacity: currentPage === totalPages ? 0.5 : 1,
-                      cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                      cursor:
+                        currentPage === totalPages ? "not-allowed" : "pointer",
                     }}
-                   
                   >
                     5ページ次へ
                   </button>
-
+ 
                   {/* 最後のページへ一気に飛ぶ */}
                   <button
                     onClick={() => changePage(totalPages)}
@@ -1556,9 +1578,9 @@ useEffect(() => {
                     style={{
                       ...styles.pageBtn,
                       opacity: currentPage === totalPages ? 0.5 : 1,
-                      cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                      cursor:
+                        currentPage === totalPages ? "not-allowed" : "pointer",
                     }}
-                    
                   >
                     最終ページ
                   </button>
@@ -1749,3 +1771,4 @@ useEffect(() => {
     </div>
   );
 }
+ 
