@@ -1,5 +1,43 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
+import DOMPurify from 'dompurify';
+ 
+ 
+const ContentDisplay = ({ content }) => {
+  if (!content) return null;
+ 
+  // 1. Base64かどうかを判定する関数
+  const isBase64 = (str) => {
+    if (typeof str !== 'string') return false;
+    // 「PG...」から始まるなど、HTMLメールがBase64化されているケースを考慮
+    return /^[A-Za-z0-9+/]+={0,2}$/.test(str) && str.length > 50;
+  };
+ 
+  // 2. Base64ならデコードする
+  let processedContent = content;
+  if (isBase64(content)) {
+    try {
+      processedContent = atob(content);
+    } catch (e) {
+      console.error("Base64デコード失敗:", e);
+    }
+  }
+ 
+  // 3. HTMLタグが含まれているか判定
+  const isHtml = /<[a-z][\s\S]*>/i.test(processedContent);
+ 
+  if (isHtml) {
+    // 安全のためにHTMLをサニタイズして表示
+    return (
+      <div
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(processedContent) }}
+      />
+    );
+  }
+ 
+  // 4. それ以外はただのテキストとして表示
+  return <div style={{ whiteSpace: 'pre-wrap' }}>{processedContent}</div>;
+};
  
 const LINK_STYLE = { color: "#3182ce", textDecoration: "underline" };
 // 1ページあたりの表示件数
@@ -25,6 +63,7 @@ const regionalPrefectures = [
       "千葉県",
       "東京都",
       "神奈川県",
+      "関東",
     ],
   },
   {
@@ -40,6 +79,8 @@ const regionalPrefectures = [
       "静岡県",
       "愛知県",
       "三重県",
+      "中部",
+      "北陸",
     ],
   },
   {
@@ -68,6 +109,10 @@ const regionalPrefectures = [
       "宮崎県",
       "鹿児島県",
       "沖縄県",
+      "関西",
+      "九州",
+      "中国",
+      "四国",
     ],
   },
 ];
@@ -164,55 +209,25 @@ const decodeHtml = (html) => {
   return textarea.value;
 };
 // テキスト内のURLやメールアドレスをリンクに変換する関数
-const formatContent = (html) => {
+// 改善案：Base64/HTMLデコードをスキップし、純粋なリンク化のみを行う
+const formatContent = (text) => {
   try {
-    const decoded = decodeHtml(html || "");
     const linkRegex = /(https?:\/\/[^\s<>"']+|[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,})/g;
-    return decoded.split(linkRegex).map((part, index) => {
+    return text.split(linkRegex).map((part, index) => {
+      // リンク化の処理はそのまま維持
       if (/^https?:\/\//.test(part)) {
-        return (
-          <a
-            key={`${part}-${index}`}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={LINK_STYLE}
-          >
-            {part}
-          </a>
-        );
+        return <a key={`${part}-${index}`} href={part} target="_blank" rel="noopener noreferrer" style={LINK_STYLE}>{part}</a>;
       }
       if (/^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(part)) {
-        return (
-          <a
-            key={`${part}-${index}`}
-            href={`mailto:${part}`}
-            style={LINK_STYLE}
-          >
-            {part}
-          </a>
-        );
+        return <a key={`${part}-${index}`} href={`mailto:${part}`} style={LINK_STYLE}>{part}</a>;
       }
       return part;
     });
   } catch {
-    return html;
+    return text;
   }
 };
-// メールの署名部分を削除する関数
-const removeSignature = (text = "") => {
-  const bodyLines = [];
-  for (const line of text.split(/\n/)) {
-    if (
-      /[◇◆□■ー\-=＝*＊#＃]{5,}/.test(line) ||
-      /^(【会社名】|【連絡先】|■署名|URL：)/.test(line)
-    ) {
-      break;
-    }
-    bodyLines.push(line);
-  }
-  return bodyLines.join("\n").trim();
-};
+ 
 // 募集人数を抽出する関数
 const extractRecruitment = (content = "") => {
   const match = content.match(/([0-9０-９]+|複数|若干)名(以上)?/);
@@ -220,19 +235,11 @@ const extractRecruitment = (content = "") => {
 };
 // 案件のカテゴリ判定
 const getProjectCategories = (project) => {
-  const text =
-    `${project.title || ""}${project.content || ""}${project.skills || ""}`.toLowerCase();
+  const text = `${project.category}`.toLowerCase();
   const categories = [];
-  if (
-    /java|php|python|ruby|go|c#|react|next\.js|vue\.js|typescript|javascript|フロントエンド|バックエンド|アプリ|開発/i.test(
-      text,
-    )
-  )
-    categories.push("dev");
-  if (/インフラ|サーバ|ネットワーク|aws|azure|gcp|cloud|監視|構築/i.test(text))
-    categories.push("infra");
-  if (/組み込み|組込|マイコン|制御|c言語|c\+\+|embedded/i.test(text))
-    categories.push("embedded");
+  if (/開発/i.test(text)) categories.push("dev");
+  if (/インフラ/i.test(text)) categories.push("infra");
+  if (/組み込み/i.test(text)) categories.push("embedded");
   return categories.length ? categories : ["dev"];
 };
 // スタイル定義
@@ -375,6 +382,10 @@ export default function Home() {
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [selectedRegion, setSelectedRegion] = useState("すべて");
   useEffect(() => {
+  setCurrentPage(1);
+}, [searchQuery, selectedPrefs, selectedSkills, favFilters, viewMode, selectedRegion]);
+ 
+  useEffect(() => {
     const checkLogin = async () => {
       try {
         const res = await fetch("/api/me", {
@@ -396,6 +407,11 @@ export default function Home() {
  
     checkLogin();
   }, []);
+ 
+  useEffect(() => {
+    if (!authChecked || !user) return;
+    fetchData();
+  }, [authChecked, user]);
  
   const router = useRouter();
  
@@ -478,29 +494,36 @@ export default function Home() {
   // APIから全データをループで取得
   const fetchData = useCallback(async () => {
     setLoading(true);
-    let allProjects = [];
-    let page = 0;
-    let isFetching = true;
  
     try {
+      let allProjects = [];
+      let page = 0;
+      let isFetching = true;
+ 
       while (isFetching) {
         const res = await fetch(`/api/mails?page=${page}`);
         const payload = await res.json();
+ 
         if (payload.error || !payload.data) break;
+ 
         allProjects = [...allProjects, ...payload.data];
+ 
         if (payload.data.length < 1000) {
           isFetching = false;
         } else {
           page = page + 1;
         }
       }
+ 
       const favorites = storage.get("favorites");
       const historyData = storage.get("history");
       const read = storage.get("readProjects");
       const applied = storage.get("appliedIds");
+ 
       setHistoryIds(historyData);
       setReadIds(read);
       setAppliedIds(applied);
+ 
       setProjects(
         allProjects.map((item) => ({
           ...item,
@@ -513,10 +536,6 @@ export default function Home() {
       setLoading(false);
     }
   }, []);
- 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
  
   // 駅名サジェスト取得
   const fetchStations = useCallback(
@@ -552,7 +571,7 @@ export default function Home() {
     },
     [selectedPrefs],
   );
- 
+ // フィルタリング処理
   // フィルタリング処理
   const filteredProjects = useMemo(() => {
     const query = searchQuery.toLowerCase();
@@ -565,108 +584,81 @@ export default function Home() {
       ? currentRegionData.prefs.map(normalize)
       : [];
  
-    // 1年前の日付を計算
-    const oneYearAgo = new Date();
- 
-    oneYearAgo.setDate(oneYearAgo.getDate() - 365);
- 
-    // 案件ごとに、募集終了が近いかどうかを判定してフラグを付与
     return projects
       .map((project) => {
-        let isExpiringSoon = false;
- 
-        if (project.created_at) {
-          const projectDate = new Date(project.created_at);
- 
-          if (projectDate >= oneYearAgo) {
-            const warningDate = new Date(projectDate);
- 
-            // 20日経過で警告
-            warningDate.setDate(warningDate.getDate() + 20);
- 
-            isExpiringSoon = new Date() >= warningDate;
-          }
-        }
- 
+        // --- 期限フラグの付与 ---
+        if (!project.created_at) return { ...project, isExpiringSoon: false };
+        const projectDate = new Date(project.created_at);
+        const expireDate = new Date(projectDate);
+        expireDate.setDate(expireDate.getDate() + 365);
+        const warningDate = new Date(expireDate);
+        warningDate.setDate(warningDate.getDate() - 30);
+        const now = new Date();
         return {
           ...project,
-          isExpiringSoon,
+          isExpiringSoon: now >= warningDate && now <= expireDate,
         };
       })
       .filter((project) => {
-        // 1年以上前は非表示
-        if (project.created_at) {
-          const projectDate = new Date(project.created_at);
+        // --- ここからがフィルタリングの全条件 ---
  
-          if (projectDate < oneYearAgo) {
-            return false;
-          }
+        // 1. 1年以上経過したものを非表示
+        if (project.created_at) {
+          const expireDate = new Date(project.created_at);
+          expireDate.setDate(expireDate.getDate() + 365);
+          if (new Date() > expireDate) return false;
         }
  
+        // 2. クローズ案件の除外
         if (hideClosed && project.isClosed) return false;
  
+        // 3. モード別のフィルタリング
         const isApplied = appliedIds.includes(project.id);
- 
         if (viewMode === "applied") return isApplied;
- 
         if (isApplied) return false;
- 
         if (viewMode === "favorites") return project.favorite;
+        if (viewMode === "history") return historyIds.includes(project.id);
  
-        if (viewMode === "history") {
-          return historyIds.includes(project.id);
-        }
- 
+        // 4. カテゴリフィルタ
         if (favFilters.length) {
           const categories = getProjectCategories(project);
- 
-          if (!favFilters.every((filter) => categories.includes(filter))) {
+          if (!favFilters.every((filter) => categories.includes(filter)))
             return false;
-          }
         }
  
-        const pureContent = removeSignature(project.content || "");
- 
-        const searchableText = `${project.title || ""}${
-          project.skills || ""
-        }${pureContent}${project.location || ""}`.toLowerCase();
- 
+        // 5. 検索・場所・スキル・リモート条件
+        const pureContent = project.content || "";
+        const searchableText =
+          `${project.title || ""}${project.skills || ""}${pureContent}${project.location || ""}`.toLowerCase();
         const projectLocation = (project.location || "").trim();
- 
         const projectPrefNormalized = normalize(projectLocation);
  
-        // 地域フィルタ
         if (viewMode === "all" && selectedRegion !== "すべて") {
           const matchesRegion = allowedPrefsNormalized.some((pref) =>
             projectPrefNormalized.startsWith(pref),
           );
- 
           if (!matchesRegion) return false;
         }
  
-        // 都道府県フィルタ
         if (selectedPrefs.length) {
           const matchesPref = selectedPrefs.some((pref) =>
             projectPrefNormalized.startsWith(normalize(pref)),
           );
- 
           if (!matchesPref) return false;
         }
  
-        // スキル一致
         const matchesSkill =
           !selectedSkills.length ||
           selectedSkills.every((skill) =>
             searchableText.includes(skill.toLowerCase()),
           );
- 
-        // リモート案件
         const matchesRemote =
           !isRemoteOnly ||
           [project.location, project.title, pureContent].some((text) =>
             text?.includes("リモート"),
           );
  
+        // 最後の条件を返す
         return searchableText.includes(query) && matchesSkill && matchesRemote;
       });
   }, [
@@ -821,12 +813,26 @@ export default function Home() {
     );
   }, [selectedRegion]);
  
-  const ProjectCard = ({ project }) => {
+  const ProjectCard = ({
+    project,
+    readIds,
+    appliedIds,
+    viewMode,
+    toggleFavorite,
+    toggleApplied,
+    openProject,
+    handleSendEmail,
+    setDeleteTargetId,
+  }) => {
     const isRead = readIds.includes(project.id);
     const isApplied = appliedIds.includes(project.id);
+    const projectCategories = getProjectCategories(project);
+ 
+    // useMemoはここでOK（コンポーネントが安定した後）
     const attachments = useMemo(() => {
       if (!project.attachments) return [];
       if (Array.isArray(project.attachments)) return project.attachments;
+ 
       try {
         return JSON.parse(project.attachments);
       } catch {
@@ -834,7 +840,7 @@ export default function Home() {
       }
     }, [project.attachments]);
  
- return (
+    return (
       <div style={{ ...styles.card, opacity: project.isClosed ? 0.7 : 1 }}>
         <div style={{ fontSize: "0.7rem", color: "#a0aec0", marginBottom: 5 }}>
           ID: {project.id}
@@ -994,7 +1000,7 @@ export default function Home() {
     );
   };
  
-  if (!authChecked) {
+if (!authChecked) {
     return <div>認証チェック中...</div>;
   }
  
@@ -1429,7 +1435,7 @@ export default function Home() {
               )}
             </div>
           )}
-          <div
+ <div
             style={{
               marginBottom: 15,
               fontSize: "0.9rem",
@@ -1465,7 +1471,18 @@ export default function Home() {
                 }}
               >
                 {currentItems.map((project) => (
-                  <ProjectCard key={project.id} project={project} />
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    readIds={readIds}
+                    appliedIds={appliedIds}
+                    viewMode={viewMode}
+                    toggleFavorite={toggleFavorite}
+                    toggleApplied={toggleApplied}
+                    openProject={openProject}
+                    handleSendEmail={handleSendEmail}
+                    setDeleteTargetId={setDeleteTargetId}
+                  />
                 ))}
               </div>
               {/*一気に飛べるボタンを追加 */}
@@ -1523,7 +1540,7 @@ export default function Home() {
                   {/* 通常のページ番号ボタン */}
                   {paginationRange.map((page, idx) => (
                     <button
-                      key={idx}
+                      key={page}
                       onClick={() =>
                         typeof page === "number" && changePage(page)
                       }
@@ -1633,6 +1650,23 @@ export default function Home() {
                 <strong>【スキル】</strong>{" "}
                 {selectedProject.skills || "記載なし"}
               </div>
+              <div>
+                <strong>【カテゴリ】</strong>{" "}
+                {getProjectCategories(selectedProject)
+                  .map((category) => {
+                    switch (category) {
+                      case "dev":
+                        return "開発";
+                      case "infra":
+                        return "インフラ";
+                      case "embedded":
+                        return "組み込み";
+                      default:
+                        return category;
+                    }
+                  })
+                  .join(" / ")}
+              </div>
               {(() => {
                 const pAttachments = !selectedProject.attachments
                   ? []
@@ -1706,7 +1740,7 @@ export default function Home() {
                 color: "#4a5568",
               }}
             >
-              {formatContent(selectedProject.content)}
+              <ContentDisplay content={selectedProject.content} />
             </div>
           </div>
         </div>
@@ -1771,4 +1805,3 @@ export default function Home() {
     </div>
   );
 }
- 
