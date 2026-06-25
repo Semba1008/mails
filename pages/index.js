@@ -1,496 +1,61 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/router";
-import DOMPurify from 'dompurify';
- 
- 
-const ContentDisplay = ({ content }) => {
-  if (!content) return null;
- 
-  // 1. Base64かどうかを判定する関数
-  const isBase64 = (str) => {
-    if (typeof str !== 'string') return false;
-    // 「PG...」から始まるなど、HTMLメールがBase64化されているケースを考慮
-    return /^[A-Za-z0-9+/]+={0,2}$/.test(str) && str.length > 50;
-  };
- 
-  // 2. Base64ならデコードする
-  let processedContent = content;
-  if (isBase64(content)) {
-    try {
-      processedContent = atob(content);
-    } catch (e) {
-      console.error("Base64デコード失敗:", e);
-    }
-  }
- 
-  // 3. HTMLタグが含まれているか判定
-  const isHtml = /<[a-z][\s\S]*>/i.test(processedContent);
- 
-  if (isHtml) {
-    // 安全のためにHTMLをサニタイズして表示
-    return (
-      <div
-        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(processedContent) }}
-      />
-    );
-  }
- 
-  // 4. それ以外はただのテキストとして表示
-  return <div style={{ whiteSpace: 'pre-wrap' }}>{processedContent}</div>;
-};
- 
-const LINK_STYLE = { color: "#3182ce", textDecoration: "underline" };
-// 1ページあたりの表示件数
-const PAGE_SIZE = 24;
-// 都道府県名の揺らぎを吸収するための正規化関数
-const normalize = (name) => name?.replace(/(都|道|府|県)$/, "") || "";
-// 地域ごとの都道府県リスト
-const regionalPrefectures = [
-  {
-    region: "東日本",
-    prefs: [
-      "北海道",
-      "青森県",
-      "岩手県",
-      "宮城県",
-      "秋田県",
-      "山形県",
-      "福島県",
-      "茨城県",
-      "栃木県",
-      "群馬県",
-      "埼玉県",
-      "千葉県",
-      "東京都",
-      "神奈川県",
-      "関東",
-    ],
-  },
-  {
-    region: "中日本",
-    prefs: [
-      "新潟県",
-      "富山県",
-      "石川県",
-      "福井県",
-      "山梨県",
-      "長野県",
-      "岐阜県",
-      "静岡県",
-      "愛知県",
-      "三重県",
-      "中部",
-      "北陸",
-    ],
-  },
-  {
-    region: "西日本",
-    prefs: [
-      "滋賀県",
-      "京都府",
-      "大阪府",
-      "兵庫県",
-      "奈良県",
-      "和歌山県",
-      "鳥取県",
-      "島根県",
-      "岡山県",
-      "広島県",
-      "山口県",
-      "徳島県",
-      "香川県",
-      "愛媛県",
-      "高知県",
-      "福岡県",
-      "佐賀県",
-      "長崎県",
-      "熊本県",
-      "大分県",
-      "宮崎県",
-      "鹿児島県",
-      "沖縄県",
-      "関西",
-      "九州",
-      "中国",
-      "四国",
-    ],
-  },
-];
-// スキルカテゴリとそれぞれのスキルリスト
-const skillCategories = [
-  {
-    label: "Language / Backend",
-    skills: [
-      "Java",
-      "PHP",
-      "Python",
-      "Ruby",
-      "Go",
-      "C#",
-      "C++",
-      "Rust",
-      "Kotlin",
-      "Swift",
-    ],
-  },
-  {
-    label: "Frontend",
-    skills: [
-      "React",
-      "Next.js",
-      "Vue.js",
-      "Nuxt.js",
-      "TypeScript",
-      "JavaScript",
-    ],
-  },
-  {
-    label: "Infra / OS / Cloud",
-    skills: [
-      "AWS",
-      "Azure",
-      "GCP",
-      "Docker",
-      "Kubernetes",
-      "Linux",
-      "Windows",
-      "Terraform",
-    ],
-  },
-  {
-    label: "DB / Tool / CI/CD",
-    skills: [
-      "MySQL",
-      "PostgreSQL",
-      "Oracle",
-      "Git",
-      "GitHub",
-      "CircleCI",
-      "Jenkins",
-      "Ansible",
-    ],
-  },
-];
-// サイドバーのカテゴリ
-const sideCategories = [
-  { id: "all", label: "すべて" },
-  { id: "dev", label: "開発" },
-  { id: "infra", label: "インフラ" },
-  { id: "embedded", label: "組み込み" },
-];
-// タブの定義
-const tabs = [
-  { id: "all", label: "案件を探す" },
-  { id: "applied", label: "応募済み" },
-  { id: "favorites", label: "お気に入り" },
-  { id: "history", label: "閲覧履歴" },
-];
-// ローカルストレージのラッパー
-const storage = {
-  get(key) {
-    if (typeof window === "undefined") return [];
-    try {
-      return JSON.parse(localStorage.getItem(key) || "[]");
-    } catch {
-      return [];
-    }
-  },
-  set(key, value) {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(key, JSON.stringify(value));
-    }
-  },
-};
-// HTMLエンティティをデコードする関数
-const decodeHtml = (html) => {
-  if (typeof window === "undefined") return html;
-  const textarea = document.createElement("textarea");
-  textarea.innerHTML = html;
-  return textarea.value;
-};
-// テキスト内のURLやメールアドレスをリンクに変換する関数
-// 改善案：Base64/HTMLデコードをスキップし、純粋なリンク化のみを行う
-const formatContent = (text) => {
-  try {
-    const linkRegex = /(https?:\/\/[^\s<>"']+|[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,})/g;
-    return text.split(linkRegex).map((part, index) => {
-      // リンク化の処理はそのまま維持
-      if (/^https?:\/\//.test(part)) {
-        return <a key={`${part}-${index}`} href={part} target="_blank" rel="noopener noreferrer" style={LINK_STYLE}>{part}</a>;
-      }
-      if (/^[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(part)) {
-        return <a key={`${part}-${index}`} href={`mailto:${part}`} style={LINK_STYLE}>{part}</a>;
-      }
-      return part;
-    });
-  } catch {
-    return text;
-  }
-};
- 
-// 募集人数を抽出する関数
-const extractRecruitment = (content = "") => {
-  const match = content.match(/([0-9０-９]+|複数|若干)名(以上)?/);
-  return match?.[0] || "記載なし";
-};
-// 案件のカテゴリ判定
-const getProjectCategories = (project) => {
-  const text = `${project.category}`.toLowerCase();
-  const categories = [];
-  if (/開発/i.test(text)) categories.push("dev");
-  if (/インフラ/i.test(text)) categories.push("infra");
-  if (/組み込み/i.test(text)) categories.push("embedded");
-  return categories.length ? categories : ["dev"];
-};
-// スタイル定義
-const styles = {
-  page: {
-    backgroundColor: "#f7fafc",
-    minHeight: "100vh",
-    color: "#2d3748",
-    fontFamily: "sans-serif",
-  },
-  nav: {
-    backgroundColor: "#fff",
-    position: "sticky",
-    top: 0,
-    zIndex: 100,
-    borderBottom: "1px solid #e2e8f0",
-  },
-  navInner: {
-    display: "flex",
-    height: 60,
-    padding: "0 20px",
-    alignItems: "center",
-  },
-  sidebar: { width: 220, flexShrink: 0 },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 25,
-    border: "1px solid #edf2f7",
-    display: "flex",
-    flexDirection: "column",
-    position: "relative",
-  },
-  badge: {
-    fontSize: "0.7rem",
-    color: "#fff",
-    padding: "2px 6px",
-    borderRadius: 4,
-    fontWeight: "bold",
-  },
-  primaryButton: {
-    padding: 10,
-    backgroundColor: "#1a365d",
-    color: "#fff",
-    border: "none",
-    borderRadius: 6,
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
-  secondaryButton: {
-    padding: 10,
-    backgroundColor: "#3182ce",
-    color: "#fff",
-    border: "none",
-    borderRadius: 6,
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
-  pageBtn: {
-    padding: "8px 14px",
-    borderRadius: 6,
-    border: "1px solid #cbd5e0",
-    background: "#fff",
-    color: "#2d3748",
-    cursor: "pointer",
-    fontWeight: "bold",
-    fontSize: "0.9rem",
-    transition: "all 0.2s",
-  },
-  modalOverlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    zIndex: 1000,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 30,
-    maxWidth: 800,
-    width: "100%",
-    maxHeight: "90vh",
-    overflowY: "auto",
-    position: "relative",
-  },
-  spinner: {
-    width: 40,
-    height: 40,
-    border: "4px solid rgba(0,191,165,0.2)",
-    borderTopColor: "#00bfa5",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite",
-    margin: "40px auto",
-  },
-  attachmentSection: {
-    marginTop: 15,
-    paddingTop: 12,
-    borderTop: "1px dashed #e2e8f0",
-  },
-  attachmentLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    fontSize: "0.85rem",
-    color: "#3182ce",
-    textDecoration: "none",
-    marginRight: 12,
-    marginBottom: 4,
-    fontWeight: "500",
-  },
-};
- 
-// メインコンポーネント
-export default function Home() {
-  const [authChecked, setAuthChecked] = useState(false);
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [projects, setProjects] = useState([]);
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedPrefs, setSelectedPrefs] = useState([]);
-  const [selectedSkills, setSelectedSkills] = useState([]);
-  const [showFilters, setShowFilters] = useState(false);
-  const [stationSuggestions, setStationSuggestions] = useState([]);
-  const [isRemoteOnly, setIsRemoteOnly] = useState(false);
-  const [hideClosed, setHideClosed] = useState(true);
-  const [viewMode, setViewMode] = useState("all");
-  const [favFilters, setFavFilters] = useState([]);
-  const [historyIds, setHistoryIds] = useState([]);
-  const [readIds, setReadIds] = useState([]);
-  const [appliedIds, setAppliedIds] = useState([]);
-  const [deleteTargetId, setDeleteTargetId] = useState(null);
-  const [selectedRegion, setSelectedRegion] = useState("すべて");
-  useEffect(() => {
-  setCurrentPage(1);
-}, [searchQuery, selectedPrefs, selectedSkills, favFilters, viewMode, selectedRegion]);
- 
-  useEffect(() => {
-    const checkLogin = async () => {
-      try {
-        const res = await fetch("/api/me", {
-          credentials: "include",
-        });
- 
-        if (!res.ok) {
-          window.location.href = "/login";
-          return;
-        }
- 
-        const data = await res.json();
-        setUser(data);
-        setAuthChecked(true);
-      } catch {
-        window.location.href = "/login";
-      }
-    };
- 
-    checkLogin();
-  }, []);
- 
-  useEffect(() => {
-    if (!authChecked || !user) return;
-    fetchData();
-  }, [authChecked, user]);
- 
-  const router = useRouter();
- 
-  const handleLogout = async () => {
-    try {
-      await fetch("/api/logout", {
-        method: "POST",
-        credentials: "include",
-      });
- 
-      router.push("/login");
-    } catch (error) {
-      console.error(error);
-      alert("ログアウトに失敗しました");
-    }
-  };
- 
-  // 🕒 検索履歴用のStateと保存関数（内部的な保存枠は余裕を持って20件に広げています）
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [history, setHistory] = useState(() => {
-    if (typeof window !== "undefined") {
-      try {
-        return JSON.parse(localStorage.getItem("searchHistory") || "[]");
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  });
-  // 検索キーワードを履歴に保存する関数。重複は削除して最新のものを先頭に、最大20件まで保持します
-  const handleSearchSubmit = (keyword) => {
-    if (!keyword || !keyword.trim()) return;
-    const trimmed = keyword.trim();
-    setHistory((prev) => {
-      // 🟢 履歴データ自体は20件まで保持し、表示側で高さを制限してスクロールさせます
-      const next = [trimmed, ...prev.filter((k) => k !== trimmed)].slice(0, 20);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("searchHistory", JSON.stringify(next));
-      }
-      return next;
-    });
-  };
- 
-  // supabaseから添付ファイル情報を取得して、 機械語（バイナリデータ）をファイルに復元してダウンロードする
-  const handleDownloadFile = async (event, fileUrl, fileName) => {
-    event.preventDefault();
-    event.stopPropagation();
- 
-    if (!fileUrl) {
-      alert("ファイルURLが存在しません。");
-      return;
-    }
- 
-    try {
-      const safeUrl = encodeURI(decodeURI(fileUrl));
-      const response = await fetch(safeUrl);
-      if (!response.ok) {
-        throw new Error(
-          `ファイルの取得に失敗しました (Status: ${response.status})`,
-        );
-      }
- 
-      const blob = await response.blob();
-      const tempUrl = window.URL.createObjectURL(blob);
- 
-      const link = document.createElement("a");
-      link.href = tempUrl;
-      link.download = fileName || "download_file";
-      document.body.appendChild(link);
-      link.click();
- 
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(tempUrl);
-    } catch (error) {
-      console.error("ダウンロードエラー:", error);
-      window.open(encodeURI(decodeURI(fileUrl)), "_blank");
-    }
-  };
- 
+You are an excellent data extraction assistant.
+Analyze the email body, extract the required information, and output JSON only.
+Remove HTML tags and extract visible text only.
+Greetings, explanations, and Markdown symbols are prohibited.
+Include signature information in context.
+Keep valid JSON format and preserve line breaks appropriately.
+
+[Output Rules]
+- Output must be a single JSON object starting with "{" and ending with "}".
+- Multiple values must be joined with "/" (Do NOT use arrays for location, price, skills, period, end_date).
+- If information is missing, output "記載なし".
+
+[Formatting Rules]
+- Clean and normalize unnecessary symbols in price and location such as "/", "・", "()".
+
+[Noise Handling]
+- Completely ignore decorative boundary lines (e.g., "********", "--------", "=================").
+- Ensure all text wrapped inside or separated by these lines is fully parsed and extracted.
+
+[Extraction Rules]
+- isClosed:
+  If the email indicates cancellation, closed, ended, hired, etc., output true. Otherwise output false. (Must NOT be a string)
+- location:
+  Prioritize actual work locations ("workplace", "勤務地", "作業場所", "working style"). Join multiple locations with "/". Do not mix signature addresses. Format as: Prefecture + City + Station. Infer missing parts from context. Every location must include a prefecture. If "リモート" or "テレワーク" is mentioned, output "リモートワーク".
+- price:
+  Extract only price information. Join multiple positions with "/". (e.g., "Leader:120万 / Developer:100万")
+- skills:
+  Output as a single slash-separated or comma-separated string. Remove bullets and "・".
+- period:
+  Extract work period information only. Join multiple values with "/".
+- end_date:
+  Extract recruitment/application period only. Do not confuse with project start date. Join multiple values with "/".
+- is_human_resource:
+  Infer the true intent. Output true if the main purpose is proposing engineers or sharing skill sheets. Output false if the purpose is seeking engineers for a project requirement. (Must NOT be a string)
+- category:
+  Classify the project into one or more of the following categories and return as a slash-separated string (e.g., "開発", "開発 / インフラ"). Do NOT use a JSON array here to keep the object flat.
+  - 開発: software/application development, implementation, coding, testing
+  - インフラ: cloud, server, network, middleware, CI/CD, operations, maintenance
+  - 組み込み: firmware, hardware, IoT, devices, sensors, vehicle systems
+
+[Output Keys]
+Output MUST be a single JSON object with the exact keys below. isClosed and is_human_resource must be boolean values (true/false), NOT strings.
+
+{
+  "location": string,
+  "price": string,
+  "skills": string,
+  "period": string,
+  "isClosed": boolean,
+  "end_date": string,
+  "is_human_resource": boolean,
+  "category": string
+}
+
+[Email Body to Analyze]
+--------
+[ここに解析したいメールの本文を貼り付ける]
+--------
   // APIから全データをループで取得
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -571,7 +136,8 @@ export default function Home() {
     },
     [selectedPrefs],
   );
- // フィルタリング処理
+ 
+  // フィルタリング処理
   // フィルタリング処理
   const filteredProjects = useMemo(() => {
     const query = searchQuery.toLowerCase();
@@ -928,8 +494,7 @@ export default function Home() {
               <span>{value}</span>
             </div>
           ))}
- 
-          {attachments.length > 0 && (
+  {attachments.length > 0 && (
             <div
               style={{
                 marginTop: 12,
@@ -1000,7 +565,7 @@ export default function Home() {
     );
   };
  
-if (!authChecked) {
+  if (!authChecked) {
     return <div>認証チェック中...</div>;
   }
  
@@ -1211,7 +776,7 @@ if (!authChecked) {
                   }}
                 />
  
-                {showSuggestions && history.length > 0 && (
+ {showSuggestions && history.length > 0 && (
                   /* 🟢 max-heightを履歴5件分相当の「220px」に固定し、あふれたらスクロール（overflowY: "auto"）にしました */
                   <div
                     style={{
@@ -1383,7 +948,8 @@ if (!authChecked) {
                       ))}
                     </div>
                   </div>
-                  {skillCategories.map((category) => (
+ 
+{skillCategories.map((category) => (
                     <div key={category.label} style={{ marginBottom: 10 }}>
                       <div
                         style={{
@@ -1435,7 +1001,7 @@ if (!authChecked) {
               )}
             </div>
           )}
- <div
+          <div
             style={{
               marginBottom: 15,
               fontSize: "0.9rem",
@@ -1555,7 +1121,7 @@ if (!authChecked) {
                     </button>
                   ))}
  
-                  {/* 1ページ次に進む */}
+                  {/* 1ページ次に進む! */}
                   <button
                     onClick={() =>
                       changePage(Math.min(currentPage + 1, totalPages))
@@ -1738,9 +1304,61 @@ if (!authChecked) {
                 fontSize: "0.9rem",
                 lineHeight: "1.6",
                 color: "#4a5568",
+                padding: "10px",
+                width: "100%",
               }}
             >
-              <ContentDisplay content={selectedProject.content} />
+              {selectedProject?.content ? (
+                (() => {
+                  const content = selectedProject.content;
+                  const isFullHtml = /<html|<head|<body/i.test(
+                    content.substring(0, 100),
+                  );
+ 
+                  if (isFullHtml) {
+                    return (
+                      <iframe
+                        key={selectedProject.id}
+                        srcDoc={`
+                                <html>
+                                  <head>
+                                    <style>
+                                        body { margin: 0; padding: 0; overflow: hidden; font-family: sans-serif; }
+                                    </style>
+                                  </head>
+                                  <body>${content}</body>
+                                </html>
+                               `}
+                        title="Email Content"
+                        scrolling="no" // 1. スクロールバーを非表示にする
+                        sandbox="allow-scripts allow-popups"
+                        onLoad={(e) => {
+                          // 2. 読み込み完了後に一度だけ高さを合わせる（ガタつきを抑える）
+                          const target = e.target;
+                          if (
+                            target.contentWindow.document.body.scrollHeight > 0
+                          ) {
+                            target.style.height =
+                              target.contentWindow.document.body.scrollHeight +
+                              "px";
+                          }
+                        }}
+                        style={{
+                          width: "100%",
+                          minHeight: "300px", // 3. 最初からある程度の高さを確保しておく（ラグ感を消す）
+                          border: "none",
+                          backgroundColor: "white",
+                          display: "block",
+                        }}
+                      />
+                    );
+                  } else {
+                    return <div>{formatContent(content)}</div>;
+                  }
+                })()
+              ) : (
+                <div>データがありません</div>
+              )}
             </div>
           </div>
         </div>
@@ -1805,3 +1423,12 @@ if (!authChecked) {
     </div>
   );
 }
+ 
+
+
+
+
+
+
+
+ 
